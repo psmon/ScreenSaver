@@ -77,7 +77,8 @@ public sealed class ClaudeConsoleEffect : IEffect
             g.DrawPath(border, path);
 
         // header: pulsing dot + title + turn state (right)
-        bool working = ClaudeStatusBus.Working;
+        int thinkingCount = ClaudeStatusBus.ThinkingCount;
+        bool working = thinkingCount > 0;
         double pulse = 0.5 + 0.5 * Math.Sin(_clock * 4.0);
         var dotColor = working ? Color.FromArgb((int)(120 + 135 * pulse), 150, 130, 245)   // thinking = lavender pulse
                      : ClaudeStatusBus.Listening ? Color.FromArgb(180, 70, 200, 130)        // ready = dim green
@@ -92,7 +93,8 @@ public sealed class ClaudeConsoleEffect : IEffect
         if (working)
         {
             char[] spin = { '|', '/', '-', '\\' };
-            status = "thinking " + spin[((int)(_clock * 8)) % spin.Length];
+            string mult = thinkingCount > 1 ? $" x{thinkingCount}" : "";   // multiple Claude sessions
+            status = "thinking " + spin[((int)(_clock * 8)) % spin.Length] + mult;
             statusColor = Color.FromArgb(240, 205, 195, 248);
         }
         else
@@ -116,12 +118,20 @@ public sealed class ClaudeConsoleEffect : IEffect
         int visibleRows = Math.Max(1, (int)(clip.Height / _lineH));
         int maxChars = Math.Max(10, (int)((clip.Right - textCol) / _charW));
 
+        var recent = ClaudeStatusBus.Recent(60);
+        // when more than one Claude session is sending, tag each line so they're distinguishable
+        bool multiSession = recent.Select(e => e.Session)
+            .Where(s => !string.IsNullOrEmpty(s)).Distinct().Take(2).Count() > 1;
+
         // Wrap each status line into one or more rows so long/rich text shows in full
         // (a single Bash command or Claude's narration spills onto several console rows).
         var rows = new List<(StatusLine Line, string Text, bool First)>();
-        foreach (var entry in ClaudeStatusBus.Recent(60))
+        foreach (var entry in recent)
         {
-            var chunks = WrapText(entry.Text, maxChars);
+            string display = multiSession && entry.Session.Length > 0
+                ? $"[{Tag(entry.Session)}] {entry.Text}"
+                : entry.Text;
+            var chunks = WrapText(display, maxChars);
             for (int i = 0; i < chunks.Count; i++)
                 rows.Add((entry, chunks[i], i == 0));
         }
@@ -165,6 +175,10 @@ public sealed class ClaudeConsoleEffect : IEffect
         "sys" => Color.FromArgb(190, 120, 135, 155),
         _ => Color.FromArgb(225, 205, 215, 225),
     };
+
+    /// <summary>Short, stable tag for a session id (last 4 chars).</summary>
+    private static string Tag(string session) =>
+        session.Length <= 4 ? session : session[^4..];
 
     /// <summary>Greedy word-wrap to <paramref name="maxChars"/> columns (monospace).</summary>
     private static List<string> WrapText(string s, int maxChars)

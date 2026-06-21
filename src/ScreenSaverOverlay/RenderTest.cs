@@ -24,17 +24,16 @@ internal static class RenderTest
         // Seed some sample status lines so the Claude console has content in a static preview.
         if (effectId is "claude-console" or "*")
         {
+            // two sessions: sess-aaaa finished its turn (say), sess-bbbb is mid-turn (thinking)
             string[][] seed =
             {
-                new[] { "sys", "session start: ScreenSaver" },
-                new[] { "prompt", "> 콘솔에 진행 텍스트를 더 풍부하게, 그리고 생각중 상태도 표현해줘" },
-                new[] { "say", "» 좋습니다. 긴 줄은 자동 줄바꿈으로 펼치고, 턴이 진행되는 동안은 헤더에 thinking 스피너를 돌려서 추론 중 상태를 표현하겠습니다." },
-                new[] { "tool", "-> Bash dotnet build C:/code/psmon/ScreenSaver/ScreenSaver.slnx -c Debug --nologo /p:WarningLevel=0" },
-                new[] { "tool", "-> Edit src/ScreenSaverOverlay/Effects/ClaudeConsoleEffect.cs" },
-                new[] { "notify", "! Claude needs your permission to run git push origin dev" },
-                new[] { "tool", "-> Task code-reviewer: 변경된 오버레이 렌더 경로의 알파 합성이 올바른지 검토" },
+                new[] { "prompt", "sess-aaaa", "> 세션 끝나면 thinking 멈추고, 멀티 세션도 고려해줘" },
+                new[] { "say",    "sess-aaaa", ">> 세션별로 상태를 추적해서, 턴이 끝나면 idle로, 진행 중인 세션이 있으면 thinking으로 표시하겠습니다." },
+                new[] { "tool",   "sess-bbbb", "-> Bash dotnet build C:/code/psmon/ScreenSaver/ScreenSaver.slnx -c Debug --nologo" },
+                new[] { "tool",   "sess-bbbb", "-> Edit src/ScreenSaverOverlay/Ipc/ClaudeStatusBus.cs" },
+                new[] { "notify", "sess-bbbb", "! Claude needs your permission to run git push origin dev" },
             };
-            foreach (var s in seed) ClaudeStatusBus.Add(s[0], s[1]);  // ends "working" -> previews the thinking state
+            foreach (var s in seed) ClaudeStatusBus.Add(s[0], s[1], s[2]);  // bbbb still working -> thinking
         }
 
         var effects = new List<IEffect>();

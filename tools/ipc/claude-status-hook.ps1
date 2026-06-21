@@ -70,12 +70,13 @@ try {
             else { $kind = 'idle'; $text = 'idle - awaiting input' }
         }
         'SessionStart'     { $kind = 'sys'; $text = 'session start: ' + (Split-Path $e.cwd -Leaf) }
-        'SessionEnd'       { $kind = 'sys'; $text = 'session end' }
+        'SessionEnd'       { $kind = 'end'; $text = 'session end' }    # 'end' tells the monitor to drop this session
         default            { $kind = 'info'; $text = [string]$e.hook_event_name }
     }
     if (-not $text) { exit 0 }
 
-    $payload = "$kind|$text"
+    # wire format: kind|session|text  (session lets the monitor track multiple Claude sessions)
+    $payload = "$kind|$($e.session_id)|$text"
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
     $udp = New-Object System.Net.Sockets.UdpClient
     [void]$udp.Send($bytes, $bytes.Length, '127.0.0.1', 47921)
