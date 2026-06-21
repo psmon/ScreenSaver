@@ -17,7 +17,7 @@ public sealed class OverlayForm : Form
     private readonly Stopwatch _clock = new();
     private long _lastTicks;
 
-    private IEffect _effect;
+    private readonly List<IEffect> _effects = new();
     private AppSettings _settings;
     private Bitmap? _surface;
     private Rectangle _bounds;
@@ -25,7 +25,6 @@ public sealed class OverlayForm : Form
     public OverlayForm(AppSettings settings)
     {
         _settings = settings.Clone().Normalized();
-        _effect = EffectRegistry.Create(_settings.EffectId);
 
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -61,7 +60,7 @@ public sealed class OverlayForm : Form
         _bounds = FullDesktopBounds;
         Bounds = _bounds;
         RecreateSurface();
-        _effect.Initialize(_bounds.Size, _settings);
+        BuildEffects();
 
         Show();
         ForceTopMost();
@@ -82,11 +81,22 @@ public sealed class OverlayForm : Form
     public void ApplySettings(AppSettings settings)
     {
         _settings = settings.Clone().Normalized();
-        _effect = EffectRegistry.Create(_settings.EffectId);
         _bounds = FullDesktopBounds;
         Bounds = _bounds;
         RecreateSurface();
-        _effect.Initialize(_bounds.Size, _settings);
+        BuildEffects();
+    }
+
+    /// <summary>Create one effect instance per enabled layer, each with its own count/size/speed.</summary>
+    private void BuildEffects()
+    {
+        _effects.Clear();
+        foreach (var layer in _settings.EnabledLayers())
+        {
+            var eff = EffectRegistry.Create(layer.EffectId);
+            eff.Initialize(_bounds.Size, _settings.ForLayer(layer));
+            _effects.Add(eff);
+        }
     }
 
     private void RecreateSurface()
@@ -102,7 +112,8 @@ public sealed class OverlayForm : Form
         double dt = (now - _lastTicks) / (double)Stopwatch.Frequency;
         _lastTicks = now;
 
-        _effect.Update(dt);
+        foreach (var eff in _effects)
+            eff.Update(dt);
         RenderFrame();
     }
 
@@ -113,7 +124,8 @@ public sealed class OverlayForm : Form
         using (var g = Graphics.FromImage(_surface))
         {
             g.Clear(Color.Transparent);
-            _effect.Render(g, _bounds.Size);
+            foreach (var eff in _effects)
+                eff.Render(g, _bounds.Size);
         }
 
         PushToScreen(_surface, (byte)_settings.Opacity);

@@ -4,21 +4,52 @@ using System.Text.Json.Serialization;
 namespace ScreenSaverOverlay.Settings;
 
 /// <summary>
+/// One overlay effect layer with its own count/size/speed. The overlay can run several of
+/// these at once (e.g. circles + diver1 + diver2), each independently configured.
+/// </summary>
+public sealed class EffectLayer
+{
+    public string EffectId { get; set; } = "";
+    public bool Enabled { get; set; } = true;
+    public int Count { get; set; } = 3;
+    public int Size { get; set; } = 100;
+    public double Speed { get; set; } = 1.0;
+
+    public EffectLayer Clone() => (EffectLayer)MemberwiseClone();
+
+    public EffectLayer Normalized()
+    {
+        Count = Math.Clamp(Count, 1, 500);
+        Size = Math.Clamp(Size, 4, 1000);
+        Speed = Math.Clamp(Speed, 0.05, 20.0);
+        return this;
+    }
+}
+
+/// <summary>
 /// User-configurable settings, persisted as JSON under
 /// %AppData%\ScreenSaverOverlay\settings.json.
 /// </summary>
 public sealed class AppSettings
 {
-    /// <summary>Id of the selected effect (see EffectRegistry).</summary>
+    /// <summary>
+    /// The overlay effect layers. Several can be enabled at once, each with its own count/size.
+    /// Empty = migrate from the legacy single-effect fields below.
+    /// </summary>
+    public List<EffectLayer> Layers { get; set; } = new();
+
+    // ---- legacy single-effect fields (kept for migration / back-compat) ---
+
+    /// <summary>Legacy: id of the single selected effect. Superseded by <see cref="Layers"/>.</summary>
     public string EffectId { get; set; } = "diver2-sprite";
 
-    /// <summary>Number of shapes / particles.</summary>
+    /// <summary>Legacy: number of shapes / particles.</summary>
     public int Count { get; set; } = 12;
 
-    /// <summary>Base size of a shape in pixels.</summary>
+    /// <summary>Legacy: base size of a shape in pixels.</summary>
     public int Size { get; set; } = 80;
 
-    /// <summary>Movement speed multiplier (1.0 = default).</summary>
+    /// <summary>Legacy: movement speed multiplier (1.0 = default).</summary>
     public double Speed { get; set; } = 1.0;
 
     /// <summary>Overall opacity 0..255.</summary>
@@ -89,7 +120,12 @@ public sealed class AppSettings
         File.WriteAllText(SettingsPath, json);
     }
 
-    public AppSettings Clone() => (AppSettings)MemberwiseClone();
+    public AppSettings Clone()
+    {
+        var c = (AppSettings)MemberwiseClone();
+        c.Layers = Layers.Select(l => l.Clone()).ToList(); // deep copy so clones don't share layers
+        return c;
+    }
 
     /// <summary>Clamp values into sane ranges so a hand-edited file can't break rendering.</summary>
     public AppSettings Normalized()
@@ -102,7 +138,34 @@ public sealed class AppSettings
         IdleSeconds = Math.Clamp(IdleSeconds, 5, 7200);
         if (string.IsNullOrWhiteSpace(EffectId))
             EffectId = "bouncing-circles";
+
+        // Migrate a legacy single-effect config into one layer.
+        if (Layers.Count == 0)
+            Layers.Add(new EffectLayer { EffectId = EffectId, Enabled = true, Count = Count, Size = Size, Speed = Speed });
+        foreach (var l in Layers)
+            l.Normalized();
         return this;
+    }
+
+    /// <summary>Enabled layers to render; falls back to one layer from the legacy fields.</summary>
+    public List<EffectLayer> EnabledLayers()
+    {
+        var enabled = Layers.Where(l => l.Enabled && !string.IsNullOrWhiteSpace(l.EffectId)).ToList();
+        if (enabled.Count == 0)
+            enabled.Add(new EffectLayer { EffectId = EffectId, Enabled = true, Count = Count, Size = Size, Speed = Speed });
+        return enabled;
+    }
+
+    /// <summary>A settings view where the global Count/Size/Speed come from a specific layer,
+    /// so an effect's <c>Initialize</c> sees that layer's own configuration.</summary>
+    public AppSettings ForLayer(EffectLayer layer)
+    {
+        var s = Clone();
+        s.EffectId = layer.EffectId;
+        s.Count = layer.Count;
+        s.Size = layer.Size;
+        s.Speed = layer.Speed;
+        return s;
     }
 
     /// <summary>The .scr to host: explicit selection, else the one registered in Windows.</summary>

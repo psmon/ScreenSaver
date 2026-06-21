@@ -14,10 +14,7 @@ public sealed class SettingsForm : Form
     private readonly AppSettings _settings;
 
     private ComboBox _screenSaverCombo = null!;
-    private ComboBox _effectCombo = null!;
-    private NumericUpDown _count = null!;
-    private NumericUpDown _size = null!;
-    private TrackBar _speed = null!;
+    private readonly List<EffectRow> _effectRows = new();
     private TrackBar _opacity = null!;
     private TextBox _colorHex = null!;
     private Button _colorPick = null!;
@@ -25,7 +22,6 @@ public sealed class SettingsForm : Form
     private NumericUpDown _idle = null!;
     private CheckBox _hostedAuto = null!;
     private CheckBox _autoStart = null!;
-    private Label _speedValue = null!;
     private Label _opacityValue = null!;
 
     /// <summary>Fired with the current (unsaved) settings whenever the user hits Preview.</summary>
@@ -36,7 +32,7 @@ public sealed class SettingsForm : Form
 
     public SettingsForm(AppSettings settings)
     {
-        _settings = settings.Clone();
+        _settings = settings.Clone().Normalized();
         BuildUi();
         LoadValues();
     }
@@ -78,7 +74,7 @@ public sealed class SettingsForm : Form
         _layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        AddSection("화면보호기 / 오버레이");
+        AddSection("화면보호기");
 
         // --- base screensaver picker -------------------------------------
         var saverPanel = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty };
@@ -92,21 +88,8 @@ public sealed class SettingsForm : Form
         saverPanel.Controls.Add(saverBrowse);
         AddRow("화면보호기", saverPanel);
 
-        _effectCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 300, DropDownWidth = 420 };
-        foreach (var (id, name) in EffectRegistry.Available)
-            _effectCombo.Items.Add(new EffectItem(id, name));
-        AddRow("오버레이 효과", _effectCombo);
-
-        _count = new NumericUpDown { Minimum = 1, Maximum = 500, Width = 100 };
-        AddRow("개수", _count);
-
-        _size = new NumericUpDown { Minimum = 4, Maximum = 1000, Increment = 4, Width = 100 };
-        AddRow("크기 (px)", _size);
-
-        _speed = new TrackBar { Minimum = 5, Maximum = 400, TickFrequency = 50, Width = 240, AutoSize = false, Height = 36 };
-        _speedValue = new Label { AutoSize = true, Margin = new Padding(10, 8, 0, 0), MinimumSize = new Size(54, 0) };
-        _speed.Scroll += (_, _) => UpdateSliderLabels();
-        AddRow("속도", WithValue(_speed, _speedValue));
+        AddSection("오버레이 효과 (여러 개 동시 선택 가능 · 각자 개수·크기·속도)");
+        AddFullRow(BuildEffectsTable());
 
         _opacity = new TrackBar { Minimum = 1, Maximum = 255, TickFrequency = 32, Width = 240, AutoSize = false, Height = 36 };
         _opacityValue = new Label { AutoSize = true, Margin = new Padding(10, 8, 0, 0), MinimumSize = new Size(54, 0) };
@@ -211,9 +194,57 @@ public sealed class SettingsForm : Form
         return p;
     }
 
+    // a control that spans both columns of the outer layout
+    private void AddFullRow(Control c)
+    {
+        c.Margin = c.Margin == Padding.Empty ? new Padding(3, 4, 3, 8) : c.Margin;
+        _layout.Controls.Add(c, 0, _row);
+        _layout.SetColumnSpan(c, 2);
+        _row++;
+    }
+
+    /// <summary>One row of per-effect controls (enable + count + size + speed).</summary>
+    private TableLayoutPanel BuildEffectsTable()
+    {
+        var t = new TableLayoutPanel
+        {
+            AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 4, Margin = new Padding(0, 2, 0, 2),
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.None,
+        };
+        for (int i = 0; i < 4; i++) t.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        Label Head(string s) => new() { Text = s, AutoSize = true, Font = new Font(Font, FontStyle.Bold),
+            ForeColor = Color.FromArgb(90, 90, 110), Margin = new Padding(3, 2, 14, 4) };
+        t.Controls.Add(Head("효과 (체크 = 사용)"), 0, 0);
+        t.Controls.Add(Head("개수"), 1, 0);
+        t.Controls.Add(Head("크기"), 2, 0);
+        t.Controls.Add(Head("속도"), 3, 0);
+
+        int r = 1;
+        foreach (var (id, name) in EffectRegistry.Available)
+        {
+            var row = new EffectRow
+            {
+                EffectId = id,
+                Enable = new CheckBox { Text = name, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 7, 16, 3) },
+                Count = new NumericUpDown { Minimum = 1, Maximum = 500, Width = 64, Margin = new Padding(3, 4, 10, 4) },
+                Size = new NumericUpDown { Minimum = 4, Maximum = 1000, Increment = 4, Width = 74, Margin = new Padding(3, 4, 10, 4) },
+                Speed = new NumericUpDown { Minimum = 0.05M, Maximum = 20M, Increment = 0.1M, DecimalPlaces = 2, Width = 64, Margin = new Padding(3, 4, 10, 4) },
+            };
+            row.Enable.CheckedChanged += (_, _) => row.SyncEnabled();
+            t.Controls.Add(row.Enable, 0, r);
+            t.Controls.Add(row.Count, 1, r);
+            t.Controls.Add(row.Size, 2, r);
+            t.Controls.Add(row.Speed, 3, r);
+            _effectRows.Add(row);
+            r++;
+        }
+        return t;
+    }
+
     private void UpdateSliderLabels()
     {
-        _speedValue.Text = $"{_speed.Value / 100.0:0.00}×";
         _opacityValue.Text = $"{_opacity.Value} / 255";
     }
 
@@ -237,21 +268,17 @@ public sealed class SettingsForm : Form
     {
         SelectSaver(_settings.ScreenSaverPath);
 
-        for (int i = 0; i < _effectCombo.Items.Count; i++)
+        foreach (var row in _effectRows)
         {
-            if (_effectCombo.Items[i] is EffectItem item &&
-                string.Equals(item.Id, _settings.EffectId, StringComparison.OrdinalIgnoreCase))
-            {
-                _effectCombo.SelectedIndex = i;
-                break;
-            }
+            var layer = _settings.Layers.FirstOrDefault(
+                l => string.Equals(l.EffectId, row.EffectId, StringComparison.OrdinalIgnoreCase));
+            row.Enable.Checked = layer is { Enabled: true };
+            row.Count.Value = Math.Clamp(layer?.Count ?? 3, (int)row.Count.Minimum, (int)row.Count.Maximum);
+            row.Size.Value = Math.Clamp(layer?.Size ?? 100, (int)row.Size.Minimum, (int)row.Size.Maximum);
+            row.Speed.Value = Math.Clamp((decimal)(layer?.Speed ?? 1.0), row.Speed.Minimum, row.Speed.Maximum);
+            row.SyncEnabled();
         }
-        if (_effectCombo.SelectedIndex < 0 && _effectCombo.Items.Count > 0)
-            _effectCombo.SelectedIndex = 0;
 
-        _count.Value = Math.Clamp(_settings.Count, (int)_count.Minimum, (int)_count.Maximum);
-        _size.Value = Math.Clamp(_settings.Size, (int)_size.Minimum, (int)_size.Maximum);
-        _speed.Value = Math.Clamp((int)Math.Round(_settings.Speed * 100), _speed.Minimum, _speed.Maximum);
         _opacity.Value = Math.Clamp(_settings.Opacity, _opacity.Minimum, _opacity.Maximum);
         _colorHex.Text = _settings.ColorHex;
         _hostedAuto.Checked = _settings.HostedAutoMode;
@@ -265,10 +292,19 @@ public sealed class SettingsForm : Form
     {
         var s = _settings.Clone();
         s.ScreenSaverPath = (_screenSaverCombo.SelectedItem as SaverItem)?.Path ?? s.ScreenSaverPath;
-        s.EffectId = (_effectCombo.SelectedItem as EffectItem)?.Id ?? s.EffectId;
-        s.Count = (int)_count.Value;
-        s.Size = (int)_size.Value;
-        s.Speed = _speed.Value / 100.0;
+
+        s.Layers = _effectRows.Select(row => new EffectLayer
+        {
+            EffectId = row.EffectId,
+            Enabled = row.Enable.Checked,
+            Count = (int)row.Count.Value,
+            Size = (int)row.Size.Value,
+            Speed = (double)row.Speed.Value,
+        }).ToList();
+        // keep the legacy single-effect fields pointing at the first enabled layer (back-compat)
+        var first = s.Layers.FirstOrDefault(l => l.Enabled) ?? s.Layers.FirstOrDefault();
+        if (first is not null) { s.EffectId = first.EffectId; s.Count = first.Count; s.Size = first.Size; s.Speed = first.Speed; }
+
         s.Opacity = _opacity.Value;
         s.ColorHex = _colorHex.Text.Trim();
         s.HostedAutoMode = _hostedAuto.Checked;
@@ -357,9 +393,15 @@ public sealed class SettingsForm : Form
         SettingsSaved?.Invoke(this, s);
     }
 
-    private sealed record EffectItem(string Id, string Name)
+    private sealed class EffectRow
     {
-        public override string ToString() => Name;
+        public string EffectId = "";
+        public CheckBox Enable = null!;
+        public NumericUpDown Count = null!;
+        public NumericUpDown Size = null!;
+        public NumericUpDown Speed = null!;
+
+        public void SyncEnabled() => Count.Enabled = Size.Enabled = Speed.Enabled = Enable.Checked;
     }
 
     private sealed record SaverItem(string Name, string Path)

@@ -18,9 +18,26 @@ internal static class RenderTest
         double[] sampleTimes = { 0.5, 3, 6, 9, 12, 16, 20, 25 };
         const double dt = 1.0 / 60.0;
 
-        var settings = new AppSettings { EffectId = effectId, Count = 3, Size = 90, Speed = 1.0 };
-        var effect = EffectRegistry.Create(effectId);
-        effect.Initialize(new Size(cw, ch), settings);
+        // effectId "*" => composite every enabled layer from the saved settings (multi-effect test);
+        // otherwise a single effect by id.
+        var effects = new List<IEffect>();
+        if (effectId == "*")
+        {
+            var settings = AppSettings.Load();
+            foreach (var layer in settings.EnabledLayers())
+            {
+                var e = EffectRegistry.Create(layer.EffectId);
+                e.Initialize(new Size(cw, ch), settings.ForLayer(layer));
+                effects.Add(e);
+            }
+        }
+        else
+        {
+            var settings = new AppSettings { EffectId = effectId, Count = 3, Size = 90, Speed = 1.0 };
+            var e = EffectRegistry.Create(effectId);
+            e.Initialize(new Size(cw, ch), settings);
+            effects.Add(e);
+        }
 
         var cells = new List<Bitmap>();
         double t = 0;
@@ -28,11 +45,11 @@ internal static class RenderTest
         double end = sampleTimes[^1] + 0.01;
         while (t <= end && si < sampleTimes.Length)
         {
-            effect.Update(dt);
+            foreach (var e in effects) e.Update(dt);
             t += dt;
             if (t >= sampleTimes[si])
             {
-                cells.Add(RenderCell(effect, cw, ch, sampleTimes[si]));
+                cells.Add(RenderCell(effects, cw, ch, sampleTimes[si]));
                 si++;
             }
         }
@@ -57,7 +74,7 @@ internal static class RenderTest
         Console.WriteLine($"saved {outPng} ({W}x{H}) from effect '{effectId}'");
     }
 
-    private static Bitmap RenderCell(IEffect effect, int w, int h, double t)
+    private static Bitmap RenderCell(List<IEffect> effects, int w, int h, double t)
     {
         var bmp = new Bitmap(w, h);
         using var g = Graphics.FromImage(bmp);
@@ -65,7 +82,7 @@ internal static class RenderTest
         using (var br = new LinearGradientBrush(new Rectangle(0, 0, w, h),
                    Color.FromArgb(255, 18, 78, 110), Color.FromArgb(255, 6, 20, 44), 90f))
             g.FillRectangle(br, 0, 0, w, h);
-        effect.Render(g, new Size(w, h));
+        foreach (var effect in effects) effect.Render(g, new Size(w, h));
         using (var font = new Font("Segoe UI", 12, FontStyle.Bold))
             g.DrawString($"t = {t:0.0}s", font, Brushes.White, 10, 8);
         return bmp;
