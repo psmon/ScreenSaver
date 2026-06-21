@@ -95,6 +95,33 @@ src/ScreenSaverOverlay/
   Service/ShortcutManager.cs       desktop shortcut creation
 ```
 
+## Claude Code live monitor (IPC)
+
+The `claude-console` effect renders a terminal-style panel in the top-left that shows **Claude
+Code's live work status** while the screensaver runs. The path is:
+
+```
+Claude Code hook (account-wide) → claude-status-hook.ps1 → UDP 127.0.0.1:47921
+   → ClaudeStatusBus (in the agent) → ClaudeConsoleEffect (top-left console)
+```
+
+UDP is deliberate: the hook fires a datagram and returns immediately (configured `async:true`),
+so it never blocks Claude Code, and if the agent isn't running the packet is just dropped.
+
+**Enable (account-wide):** install the hook script and add the `hooks` block to
+`%USERPROFILE%\.claude\settings.json` for the events you want streamed — `UserPromptSubmit`,
+`PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `SessionStart`, `SessionEnd`. Each runs:
+
+```json
+{ "type": "command", "command": "powershell",
+  "args": ["-NoProfile", "-File", "C:\\Users\\<you>\\.claude\\claude-status-hook.ps1"],
+  "async": true, "timeout": 5 }
+```
+
+The canonical script lives at `tools/ipc/claude-status-hook.ps1` (copy it to `~/.claude/`).
+**Disable:** remove the `hooks` block from `~/.claude/settings.json` (a `.bak` backup is kept).
+Then add the **"Claude Code Monitor (console)"** effect as an overlay layer in Settings.
+
 ## Roadmap
 
 - Direct2D / Direct3D renderer for GPU-accelerated and 3D effects (the `IEffect` contract is

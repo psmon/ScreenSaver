@@ -1,6 +1,7 @@
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using ScreenSaverOverlay.Effects;
+using ScreenSaverOverlay.Ipc;
 using ScreenSaverOverlay.Settings;
 
 namespace ScreenSaverOverlay;
@@ -20,6 +21,27 @@ internal static class RenderTest
 
         // effectId "*" => composite every enabled layer from the saved settings (multi-effect test);
         // otherwise a single effect by id.
+        // Seed some sample status lines so the Claude console has content in a static preview.
+        if (effectId is "claude-console" or "*")
+        {
+            string[][] seed =
+            {
+                new[] { "sys", "session start: ScreenSaver" },
+                new[] { "prompt", "> ipc로 작업상태 전달하는 콘솔 모니터 만들어줘" },
+                new[] { "tool", "-> Read src/ScreenSaverOverlay/Program.cs" },
+                new[] { "done", "OK Read" },
+                new[] { "tool", "-> Bash dotnet build ScreenSaver.slnx -c Debug" },
+                new[] { "done", "OK Bash" },
+                new[] { "tool", "-> Edit Effects/ClaudeConsoleEffect.cs" },
+                new[] { "done", "OK Edit" },
+                new[] { "notify", "! Claude needs your permission to run git push" },
+                new[] { "tool", "-> Bash git push origin dev" },
+                new[] { "done", "OK Bash" },
+                new[] { "idle", "idle - awaiting input" },
+            };
+            foreach (var s in seed) ClaudeStatusBus.Add(s[0], s[1]);
+        }
+
         var effects = new List<IEffect>();
         if (effectId == "*")
         {

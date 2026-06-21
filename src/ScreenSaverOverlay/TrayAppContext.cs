@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using ScreenSaverOverlay.Ipc;
 using ScreenSaverOverlay.Overlay;
 using ScreenSaverOverlay.Screensaver;
 using ScreenSaverOverlay.Service;
@@ -37,6 +38,10 @@ public sealed class TrayAppContext : ApplicationContext
     public TrayAppContext()
     {
         _settings = AppSettings.Load();
+
+        // Listen for Claude Code status from the moment the agent starts, so the console has a
+        // backlog ready when the screensaver kicks in (the UDP listener is idle and cheap).
+        ClaudeStatusBus.Start();
 
         _tray = new NotifyIcon
         {
