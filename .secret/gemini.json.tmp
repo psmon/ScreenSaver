@@ -1,0 +1,8 @@
+{
+  "_template": "Gemini 이미지/텍스트 프로바이더 시크릿 템플릿입니다. 이 파일을 같은 폴더의 gemini.json 으로 복사한 뒤 api_key 를 실제 키로 채우세요. 실제 키 파일(.secret/*.json)은 .gitignore 로 커밋에서 제외됩니다. 이 .tmp 템플릿만 저장소에 커밋됩니다.",
+  "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+  "api_key": "여기에-실제-Gemini-API-키-입력",
+  "auth_header": "Authorization",
+  "text_model": "gemini-3.1-flash",
+  "image_model": "gemini-3.1-flash-image-preview"
+}

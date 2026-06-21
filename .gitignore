@@ -67,6 +67,11 @@ TestResults/
 # Rider
 *.sln.iml
 
+# Python (sprite-animator skill scripts)
+__pycache__/
+*.pyc
+*.pyo
+
 # OS files
 Thumbs.db
 ehthumbs.db
@@ -77,3 +82,12 @@ $RECYCLE.BIN/
 # App-local scratch
 _*.png
 *.local.json
+
+# Secrets — real API keys never get committed; only the .tmp templates do
+.secret/*.json
+# ...but DO keep the secret templates (the broad *.tmp rule above would hide them)
+!.secret/*.json.tmp
+
+# Generated sprite intermediates (concept art / raw frames are large)
+image/
+design/sprite/

@@ -1,0 +1,21 @@
+# Case S — Sprite generation pipeline dependencies
+#
+# Minimal (analysis + post-processing without BiRefNet, HSV fallback only):
+#   Pillow, colorthief, numpy
+#
+# Optional (BiRefNet matting + SSIM/ΔE evaluation):
+#   torch, transformers, torchvision, scikit-image, opencv-python
+#
+# install:
+#   pip install -r .claude/skills/pencil-design/scripts/requirements-sprite.txt
+
+Pillow>=10
+colorthief>=0.2.1
+numpy>=2
+
+# Optional — uncomment for full quality (BiRefNet ~1GB model on first run)
+# torch>=2
+# torchvision>=0.16
+# transformers>=4.40
+# scikit-image>=0.22
+# opencv-python>=4.10
