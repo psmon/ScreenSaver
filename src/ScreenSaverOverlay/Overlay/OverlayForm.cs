@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using ScreenSaverOverlay.Effects;
 using ScreenSaverOverlay.Native;
 using ScreenSaverOverlay.Settings;
@@ -17,9 +18,16 @@ public sealed class OverlayForm : Form
     private readonly Stopwatch _clock = new();
     private long _lastTicks;
 
+    private const int FrameIntervalMs = 33; // ~30 FPS — smooth enough for sprites, ~half the CPU of 60
+
     private readonly List<IEffect> _effects = new();
     private AppSettings _settings;
+
+    // A persistent DIB section is the layered-window surface: we draw GDI+ straight into its
+    // pixels and hand its DC to UpdateLayeredWindow every frame — no per-frame GetHbitmap/DC
+    // churn (that allocation+copy was the bulk of the overlay's CPU).
     private Bitmap? _surface;
+    private IntPtr _memDc, _dib, _oldObj, _bits;
     private Rectangle _bounds;
 
     public OverlayForm(AppSettings settings)
@@ -32,7 +40,7 @@ public sealed class OverlayForm : Form
         TopMost = true;
         Text = "ScreenSaverOverlay";
 
-        _timer.Interval = 16; // ~60 FPS
+        _timer.Interval = FrameIntervalMs;
         _timer.Tick += OnTick;
     }
 
@@ -101,9 +109,28 @@ public sealed class OverlayForm : Form
 
     private void RecreateSurface()
     {
-        _surface?.Dispose();
-        _surface = new Bitmap(Math.Max(1, _bounds.Width), Math.Max(1, _bounds.Height),
-            PixelFormat.Format32bppArgb);
+        DisposeSurface();
+
+        int w = Math.Max(1, _bounds.Width), h = Math.Max(1, _bounds.Height);
+        IntPtr screenDc = NativeMethods.GetDC(IntPtr.Zero);
+        _memDc = NativeMethods.CreateCompatibleDC(screenDc);
+
+        var bi = new NativeMethods.BITMAPINFOHEADER
+        {
+            biSize = Marshal.SizeOf<NativeMethods.BITMAPINFOHEADER>(),
+            biWidth = w,
+            biHeight = -h,           // top-down so it matches the managed Bitmap orientation
+            biPlanes = 1,
+            biBitCount = 32,
+            biCompression = NativeMethods.BI_RGB,
+        };
+        _dib = NativeMethods.CreateDIBSection(_memDc, ref bi, NativeMethods.DIB_RGB_COLORS, out _bits, IntPtr.Zero, 0);
+        _oldObj = NativeMethods.SelectObject(_memDc, _dib);
+        NativeMethods.ReleaseDC(IntPtr.Zero, screenDc);
+
+        // Premultiplied ARGB: GDI+ draws straight into the DIB bits in the format
+        // UpdateLayeredWindow expects (AC_SRC_ALPHA).
+        _surface = new Bitmap(w, h, w * 4, PixelFormat.Format32bppPArgb, _bits);
     }
 
     private void OnTick(object? sender, EventArgs e)
@@ -119,38 +146,32 @@ public sealed class OverlayForm : Form
 
     private void RenderFrame()
     {
-        if (_surface is null) return;
+        if (_surface is null || _memDc == IntPtr.Zero) return;
 
         using (var g = Graphics.FromImage(_surface))
         {
             g.Clear(Color.Transparent);
             foreach (var eff in _effects)
                 eff.Render(g, _bounds.Size);
+            g.Flush();
         }
+        NativeMethods.GdiFlush(); // ensure GDI+ writes have landed in the DIB before the blit
 
-        PushToScreen(_surface, (byte)_settings.Opacity);
+        PushToScreen((byte)_settings.Opacity);
     }
 
     /// <summary>
-    /// Canonical per-pixel-alpha blit via UpdateLayeredWindow. The bitmap carries the alpha
-    /// channel; <paramref name="opacity"/> scales the whole frame uniformly.
+    /// Per-pixel-alpha blit via UpdateLayeredWindow, reusing the persistent DIB-backed memory DC
+    /// (no per-frame bitmap/DC allocation).
     /// </summary>
-    private void PushToScreen(Bitmap bitmap, byte opacity)
+    private void PushToScreen(byte opacity)
     {
         IntPtr screenDc = NativeMethods.GetDC(IntPtr.Zero);
-        IntPtr memDc = NativeMethods.CreateCompatibleDC(screenDc);
-        IntPtr hBitmap = IntPtr.Zero;
-        IntPtr oldBitmap = IntPtr.Zero;
-
         try
         {
-            hBitmap = bitmap.GetHbitmap(Color.FromArgb(0)); // preserves the alpha channel
-            oldBitmap = NativeMethods.SelectObject(memDc, hBitmap);
-
-            var size = new NativeMethods.SIZE(bitmap.Width, bitmap.Height);
+            var size = new NativeMethods.SIZE(_bounds.Width, _bounds.Height);
             var src = new NativeMethods.POINT(0, 0);
             var dst = new NativeMethods.POINT(_bounds.Left, _bounds.Top);
-
             var blend = new NativeMethods.BLENDFUNCTION
             {
                 BlendOp = NativeMethods.AC_SRC_OVER,
@@ -158,20 +179,26 @@ public sealed class OverlayForm : Form
                 SourceConstantAlpha = opacity,
                 AlphaFormat = NativeMethods.AC_SRC_ALPHA,
             };
-
             NativeMethods.UpdateLayeredWindow(Handle, screenDc, ref dst, ref size,
-                memDc, ref src, 0, ref blend, NativeMethods.ULW_ALPHA);
+                _memDc, ref src, 0, ref blend, NativeMethods.ULW_ALPHA);
         }
         finally
         {
             NativeMethods.ReleaseDC(IntPtr.Zero, screenDc);
-            if (hBitmap != IntPtr.Zero)
-            {
-                NativeMethods.SelectObject(memDc, oldBitmap);
-                NativeMethods.DeleteObject(hBitmap);
-            }
-            NativeMethods.DeleteDC(memDc);
         }
+    }
+
+    private void DisposeSurface()
+    {
+        _surface?.Dispose();
+        _surface = null;
+        if (_memDc != IntPtr.Zero)
+        {
+            if (_oldObj != IntPtr.Zero) NativeMethods.SelectObject(_memDc, _oldObj);
+            if (_dib != IntPtr.Zero) NativeMethods.DeleteObject(_dib);
+            NativeMethods.DeleteDC(_memDc);
+        }
+        _memDc = _dib = _oldObj = _bits = IntPtr.Zero;
     }
 
     private void ForceTopMost()
@@ -186,7 +213,7 @@ public sealed class OverlayForm : Form
         if (disposing)
         {
             _timer.Dispose();
-            _surface?.Dispose();
+            DisposeSurface();
         }
         base.Dispose(disposing);
     }

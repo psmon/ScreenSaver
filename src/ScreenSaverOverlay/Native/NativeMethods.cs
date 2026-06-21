@@ -118,6 +118,33 @@ internal static partial class NativeMethods
     [LibraryImport("user32.dll")]
     public static partial int ReleaseDC(IntPtr hWnd, IntPtr hDC);
 
+    // ---- DIB section (reused layered-window surface) ----------------------
+    public const uint DIB_RGB_COLORS = 0;
+    public const int BI_RGB = 0;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct BITMAPINFOHEADER
+    {
+        public int biSize;
+        public int biWidth;
+        public int biHeight;     // negative = top-down
+        public short biPlanes;
+        public short biBitCount;
+        public int biCompression;
+        public int biSizeImage;
+        public int biXPelsPerMeter;
+        public int biYPelsPerMeter;
+        public int biClrUsed;
+        public int biClrImportant;
+    }
+
+    [LibraryImport("gdi32.dll")]
+    public static partial IntPtr CreateDIBSection(IntPtr hdc, ref BITMAPINFOHEADER pbmi,
+        uint usage, out IntPtr ppvBits, IntPtr hSection, uint offset);
+
+    [LibraryImport("gdi32.dll")]
+    public static partial void GdiFlush();
+
     [LibraryImport("gdi32.dll")]
     public static partial IntPtr CreateCompatibleDC(IntPtr hdc);
 
