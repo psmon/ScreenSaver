@@ -27,6 +27,13 @@ public static class ClaudeStatusBus
     public static DateTime LastReceived { get; private set; }
     public static bool Listening { get; private set; }
 
+    /// <summary>
+    /// True while a Claude turn is in progress (a prompt/tool/notification arrived and no turn-end
+    /// has come yet). Lets the console show a "thinking" state during long reasoning gaps where no
+    /// event fires — instead of falsely going idle.
+    /// </summary>
+    public static bool Working { get; private set; }
+
     public static void Start()
     {
         if (_started) return;
@@ -89,6 +96,12 @@ public static class ClaudeStatusBus
             Lines.AddLast(new StatusLine(DateTime.Now, kind, text));
             while (Lines.Count > Capacity) Lines.RemoveFirst();
             LastReceived = DateTime.Now;
+            Working = kind switch
+            {
+                "prompt" or "tool" or "notify" or "think" => true,  // a turn is underway
+                "say" or "idle" => false,                            // turn ended
+                _ => Working,
+            };
         }
     }
 

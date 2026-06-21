@@ -76,17 +76,31 @@ public sealed class ClaudeConsoleEffect : IEffect
         using (var path = Rounded(panel, 10))
             g.DrawPath(border, path);
 
-        // header: pulsing dot + title + live status (right)
-        double pulse = 0.5 + 0.5 * Math.Sin(_clock * 3.0);
-        bool live = ClaudeStatusBus.Listening && (DateTime.Now - ClaudeStatusBus.LastReceived).TotalSeconds < 8;
-        var dotColor = live ? Color.FromArgb((int)(120 + 135 * pulse), 60, 230, 130)
-                            : Color.FromArgb(170, 120, 130, 140);
+        // header: pulsing dot + title + turn state (right)
+        bool working = ClaudeStatusBus.Working;
+        double pulse = 0.5 + 0.5 * Math.Sin(_clock * 4.0);
+        var dotColor = working ? Color.FromArgb((int)(120 + 135 * pulse), 150, 130, 245)   // thinking = lavender pulse
+                     : ClaudeStatusBus.Listening ? Color.FromArgb(180, 70, 200, 130)        // ready = dim green
+                     : Color.FromArgb(170, 120, 130, 140);
         using (var dot = new SolidBrush(dotColor))
             g.FillEllipse(dot, x + pad, y + headH / 2 - 5, 10, 10);
         using (var title = new SolidBrush(Color.FromArgb(235, 210, 220, 235)))
-            g.DrawString("claude code · monitor", _headFont, title, x + pad + 18, y + 7);
-        string status = ClaudeStatusBus.Listening ? (live ? "LIVE" : "idle") : "offline";
-        using (var st = new SolidBrush(live ? Color.FromArgb(230, 80, 230, 140) : Color.FromArgb(190, 150, 160, 170)))
+            g.DrawString("claude code", _headFont, title, x + pad + 18, y + 7);
+
+        // right-aligned state: animated "thinking" while a turn runs, else idle/offline
+        string status; Color statusColor;
+        if (working)
+        {
+            char[] spin = { '|', '/', '-', '\\' };
+            status = "thinking " + spin[((int)(_clock * 8)) % spin.Length];
+            statusColor = Color.FromArgb(240, 205, 195, 248);
+        }
+        else
+        {
+            status = ClaudeStatusBus.Listening ? "idle" : "offline";
+            statusColor = Color.FromArgb(195, 150, 160, 175);
+        }
+        using (var st = new SolidBrush(statusColor))
         {
             var ssz = g.MeasureString(status, _font);
             g.DrawString(status, _font, st, x + panelW - pad - ssz.Width, y + 9);
@@ -99,28 +113,41 @@ public sealed class ClaudeConsoleEffect : IEffect
 
         float tsCol = x + pad;
         float textCol = tsCol + _tsW + 12;            // text starts after the timestamp column
-        int visible = Math.Max(1, (int)(clip.Height / _lineH));
-        int maxChars = Math.Max(8, (int)((clip.Right - textCol) / _charW));
-        var lines = ClaudeStatusBus.Recent(visible);
+        int visibleRows = Math.Max(1, (int)(clip.Height / _lineH));
+        int maxChars = Math.Max(10, (int)((clip.Right - textCol) / _charW));
 
-        float ly = clip.Bottom - lines.Count * _lineH;   // newest at the bottom
-        foreach (var line in lines)
+        // Wrap each status line into one or more rows so long/rich text shows in full
+        // (a single Bash command or Claude's narration spills onto several console rows).
+        var rows = new List<(StatusLine Line, string Text, bool First)>();
+        foreach (var entry in ClaudeStatusBus.Recent(60))
         {
-            string ts = line.Time.ToString("HH:mm:ss");
-            string text = line.Text.Length > maxChars ? line.Text[..(maxChars - 1)] + "…" : line.Text;
-            using (var tsb = new SolidBrush(Color.FromArgb(150, 110, 120, 135)))
-                g.DrawString(ts, _font, tsb, tsCol, ly);
+            var chunks = WrapText(entry.Text, maxChars);
+            for (int i = 0; i < chunks.Count; i++)
+                rows.Add((entry, chunks[i], i == 0));
+        }
+        int startRow = Math.Max(0, rows.Count - visibleRows);
+
+        float ly = clip.Bottom - (rows.Count - startRow) * _lineH;   // newest at the bottom
+        string lastText = "";
+        for (int r = startRow; r < rows.Count; r++)
+        {
+            var (line, text, first) = rows[r];
+            if (first)
+                using (var tsb = new SolidBrush(Color.FromArgb(150, 110, 120, 135)))
+                    g.DrawString(line.Time.ToString("HH:mm:ss"), _font, tsb, tsCol, ly);
             using (var tb = new SolidBrush(ColorFor(line.Kind)))
                 g.DrawString(text, _font, tb, textCol, ly);
+            lastText = text;
             ly += _lineH;
         }
 
-        // blinking cursor on the line after the last entry
+        // blinking block cursor right after the last character
         if (((int)(_clock * 2)) % 2 == 0)
         {
             float cy = clip.Bottom - _lineH;
+            float cx = textCol + lastText.Length * _charW;
             using var cur = new SolidBrush(Color.FromArgb(220, 120, 230, 150));
-            g.FillRectangle(cur, textCol, cy + 3, _charW * 0.9f, _lineH - 6);
+            g.FillRectangle(cur, cx, cy + 3, _charW * 0.9f, _lineH - 6);
         }
 
         g.Clip = oldClip;
@@ -128,15 +155,41 @@ public sealed class ClaudeConsoleEffect : IEffect
 
     private static Color ColorFor(string kind) => kind switch
     {
-        "prompt" => Color.FromArgb(240, 232, 236, 245),
-        "tool" => Color.FromArgb(235, 90, 215, 240),
-        "done" => Color.FromArgb(230, 70, 215, 150),
-        "notify" => Color.FromArgb(235, 250, 200, 90),
+        "prompt" => Color.FromArgb(245, 250, 235, 150),  // user prompt — soft yellow
+        "say" => Color.FromArgb(245, 225, 220, 248),     // Claude narration — lavender white
+        "tool" => Color.FromArgb(235, 90, 215, 240),     // tool call — cyan
+        "done" => Color.FromArgb(230, 70, 215, 150),     // tool done — green
+        "notify" => Color.FromArgb(235, 250, 200, 90),   // notification — amber
         "error" => Color.FromArgb(235, 245, 120, 120),
         "idle" => Color.FromArgb(200, 160, 170, 185),
         "sys" => Color.FromArgb(190, 120, 135, 155),
         _ => Color.FromArgb(225, 205, 215, 225),
     };
+
+    /// <summary>Greedy word-wrap to <paramref name="maxChars"/> columns (monospace).</summary>
+    private static List<string> WrapText(string s, int maxChars)
+    {
+        var rows = new List<string>();
+        if (string.IsNullOrEmpty(s)) { rows.Add(""); return rows; }
+        string cur = "";
+        foreach (var word in s.Split(' '))
+        {
+            var w = word;
+            // a single word longer than the line: hard-split it
+            while (w.Length > maxChars)
+            {
+                if (cur.Length > 0) { rows.Add(cur); cur = ""; }
+                rows.Add(w[..maxChars]);
+                w = w[maxChars..];
+            }
+            if (cur.Length == 0) cur = w;
+            else if (cur.Length + 1 + w.Length <= maxChars) cur += " " + w;
+            else { rows.Add(cur); cur = w; }
+        }
+        if (cur.Length > 0) rows.Add(cur);
+        if (rows.Count == 0) rows.Add("");
+        return rows;
+    }
 
     private static GraphicsPath Rounded(Rectangle r, int radius)
     {
