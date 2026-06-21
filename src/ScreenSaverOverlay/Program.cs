@@ -29,6 +29,17 @@ internal static class Program
             return 0;
 
         ApplicationConfiguration.Initialize();
+
+        // --settings opens just the settings dialog (handy for quick edits / UI testing).
+        if (args.Any(a => a.Equals("--settings", StringComparison.OrdinalIgnoreCase)))
+        {
+            var settings = Settings.AppSettings.Load();
+            using var dlg = new Settings.SettingsForm(settings);
+            dlg.SettingsSaved += (_, s) => s.Save();
+            Application.Run(dlg);
+            return 0;
+        }
+
         Application.Run(new TrayAppContext());
         GC.KeepAlive(mutex);
         return 0;

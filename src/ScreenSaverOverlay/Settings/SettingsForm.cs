@@ -25,6 +25,8 @@ public sealed class SettingsForm : Form
     private NumericUpDown _idle = null!;
     private CheckBox _hostedAuto = null!;
     private CheckBox _autoStart = null!;
+    private Label _speedValue = null!;
+    private Label _opacityValue = null!;
 
     /// <summary>Fired with the current (unsaved) settings whenever the user hits Preview.</summary>
     public event EventHandler<AppSettings>? LivePreviewRequested;
@@ -39,122 +41,196 @@ public sealed class SettingsForm : Form
         LoadValues();
     }
 
+    private TableLayoutPanel _layout = null!;
+    private int _row;
+
     private void BuildUi()
     {
-        Text = "Screensaver Overlay — Settings";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
+        Font = new Font("Segoe UI", 9.75f);
+        AutoScaleMode = AutoScaleMode.Dpi;
+        Text = "Screensaver Overlay — 설정";
+        FormBorderStyle = FormBorderStyle.Sizable;
         StartPosition = FormStartPosition.CenterScreen;
         MaximizeBox = false;
         MinimizeBox = false;
-        ClientSize = new Size(470, 560);
-        Font = new Font("Segoe UI", 9f);
+        MinimumSize = new Size(520, 420);
+        ClientSize = new Size(680, 720);
+        // Final size/position is clamped to the screen in OnLoad; the dialog is freely resizable.
 
-        var layout = new TableLayoutPanel
+        // Root: scrollable content on top (fills), button bar pinned at the bottom.
+        // Using a 2-row TableLayoutPanel avoids dock-order clipping entirely.
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+
+        _layout = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             ColumnCount = 2,
-            Padding = new Padding(16),
+            Padding = new Padding(20, 16, 20, 16),
             AutoSize = true,
-            ColumnStyles =
-            {
-                new ColumnStyle(SizeType.Absolute, 140),
-                new ColumnStyle(SizeType.Percent, 100),
-            },
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            GrowStyle = TableLayoutPanelGrowStyle.AddRows,
         };
+        // AutoSize label column so labels never wrap, even at high DPI.
+        _layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        int row = 0;
-        void AddRow(string label, Control control)
-        {
-            layout.Controls.Add(new Label
-            {
-                Text = label,
-                Anchor = AnchorStyles.Left,
-                AutoSize = true,
-                Margin = new Padding(3, 8, 3, 3),
-            }, 0, row);
-            control.Margin = new Padding(3, 5, 3, 5);
-            layout.Controls.Add(control, 1, row);
-            row++;
-        }
+        AddSection("화면보호기 / 오버레이");
 
         // --- base screensaver picker -------------------------------------
-        var saverPanel = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Margin = Padding.Empty };
-        _screenSaverCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 250 };
+        var saverPanel = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty };
+        _screenSaverCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 300, DropDownWidth = 420 };
         _screenSaverCombo.Items.Add(new SaverItem("(Windows 기본값 사용)", ""));
         foreach (var s in ScreenSaverCatalog.Enumerate())
             _screenSaverCombo.Items.Add(new SaverItem(s.DisplayName, s.Path));
-        var saverBrowse = new Button { Text = "찾기…", Width = 60 };
+        var saverBrowse = new Button { Text = "찾기…", AutoSize = true, Margin = new Padding(8, 0, 0, 0) };
         saverBrowse.Click += OnBrowseSaver;
         saverPanel.Controls.Add(_screenSaverCombo);
         saverPanel.Controls.Add(saverBrowse);
-        AddRow("Screensaver", saverPanel);
+        AddRow("화면보호기", saverPanel);
 
-        _effectCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 250 };
+        _effectCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 300, DropDownWidth = 420 };
         foreach (var (id, name) in EffectRegistry.Available)
             _effectCombo.Items.Add(new EffectItem(id, name));
-        AddRow("Overlay effect", _effectCombo);
+        AddRow("오버레이 효과", _effectCombo);
 
-        _count = new NumericUpDown { Minimum = 1, Maximum = 500, Width = 90 };
-        AddRow("Count", _count);
+        _count = new NumericUpDown { Minimum = 1, Maximum = 500, Width = 100 };
+        AddRow("개수", _count);
 
-        _size = new NumericUpDown { Minimum = 4, Maximum = 1000, Increment = 4, Width = 90 };
-        AddRow("Size (px)", _size);
+        _size = new NumericUpDown { Minimum = 4, Maximum = 1000, Increment = 4, Width = 100 };
+        AddRow("크기 (px)", _size);
 
-        _speed = new TrackBar { Minimum = 5, Maximum = 400, TickFrequency = 50, Width = 250 };
-        AddRow("Speed (x0.01)", _speed);
+        _speed = new TrackBar { Minimum = 5, Maximum = 400, TickFrequency = 50, Width = 240, AutoSize = false, Height = 36 };
+        _speedValue = new Label { AutoSize = true, Margin = new Padding(10, 8, 0, 0), MinimumSize = new Size(54, 0) };
+        _speed.Scroll += (_, _) => UpdateSliderLabels();
+        AddRow("속도", WithValue(_speed, _speedValue));
 
-        _opacity = new TrackBar { Minimum = 1, Maximum = 255, TickFrequency = 32, Width = 250 };
-        AddRow("Opacity", _opacity);
+        _opacity = new TrackBar { Minimum = 1, Maximum = 255, TickFrequency = 32, Width = 240, AutoSize = false, Height = 36 };
+        _opacityValue = new Label { AutoSize = true, Margin = new Padding(10, 8, 0, 0), MinimumSize = new Size(54, 0) };
+        _opacity.Scroll += (_, _) => UpdateSliderLabels();
+        AddRow("불투명도", WithValue(_opacity, _opacityValue));
 
-        var colorPanel = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Margin = Padding.Empty };
-        _colorHex = new TextBox { Width = 120, PlaceholderText = "#RRGGBB or empty=rainbow" };
-        _colorPick = new Button { Text = "Pick…", Width = 70 };
+        var colorPanel = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty };
+        _colorHex = new TextBox { Width = 150, PlaceholderText = "#RRGGBB (비우면 무지개)" };
+        _colorPick = new Button { Text = "색 선택…", AutoSize = true, Margin = new Padding(8, 0, 0, 0) };
         _colorPick.Click += OnPickColor;
         colorPanel.Controls.Add(_colorHex);
         colorPanel.Controls.Add(_colorPick);
-        AddRow("Color", colorPanel);
+        AddRow("색상", colorPanel);
+
+        AddSection("자동 작동");
 
         _hostedAuto = new CheckBox
         {
-            Text = "유휴 시 화면보호기+오버레이 자동 실행 (Windows 자체 화면보호기는 비활성화)",
+            Text = "유휴 시 화면보호기 + 오버레이 자동 실행\n(Windows 자체 화면보호기는 비활성화)",
             AutoSize = true,
+            Margin = new Padding(3, 6, 3, 6),
         };
-        AddRow("Auto mode", _hostedAuto);
+        AddRow("자동 모드", _hostedAuto);
 
-        _idle = new NumericUpDown { Minimum = 5, Maximum = 7200, Increment = 10, Width = 90 };
-        AddRow("Idle to start (s)", _idle);
+        _idle = new NumericUpDown { Minimum = 5, Maximum = 7200, Increment = 10, Width = 100 };
+        AddRow("시작 유휴시간 (초)", _idle);
 
-        _delay = new NumericUpDown { Minimum = 0, Maximum = 600, Width = 90 };
-        AddRow("Overlay delay (s)", _delay);
+        _delay = new NumericUpDown { Minimum = 0, Maximum = 600, Width = 100 };
+        AddRow("오버레이 지연 (초)", _delay);
 
-        var residencyPanel = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, Margin = Padding.Empty };
-        _autoStart = new CheckBox { Text = "Start with Windows (stay resident / service)", AutoSize = true };
-        var shortcutBtn = new Button { Text = "Create desktop shortcut", AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
+        AddSection("상주 / 바로가기");
+
+        _autoStart = new CheckBox { Text = "Windows 시작 시 자동 실행 (상주 / 서비스)", AutoSize = true };
+        AddRow("자동 시작", _autoStart);
+
+        var shortcutBtn = new Button { Text = "바탕화면 바로가기 만들기", AutoSize = true };
         shortcutBtn.Click += OnCreateShortcut;
-        residencyPanel.Controls.Add(_autoStart);
-        residencyPanel.Controls.Add(shortcutBtn);
-        AddRow("Residency", residencyPanel);
+        AddRow("", shortcutBtn);
 
+        scroll.Controls.Add(_layout);
+        root.Controls.Add(scroll, 0, 0);
+
+        // --- button bar ---------------------------------------------------
         var buttons = new FlowLayoutPanel
         {
-            Dock = DockStyle.Bottom,
+            Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.RightToLeft,
-            Padding = new Padding(12),
-            Height = 56,
+            Padding = new Padding(14, 10, 14, 10),
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
         };
-        var save = new Button { Text = "Save", Width = 90, DialogResult = DialogResult.OK };
-        var cancel = new Button { Text = "Cancel", Width = 90, DialogResult = DialogResult.Cancel };
-        var preview = new Button { Text = "Preview", Width = 90 };
+        var save = new Button { Text = "저장", AutoSize = true, MinimumSize = new Size(96, 30), DialogResult = DialogResult.OK };
+        var cancel = new Button { Text = "취소", AutoSize = true, MinimumSize = new Size(96, 30), DialogResult = DialogResult.Cancel };
+        var preview = new Button { Text = "미리보기", AutoSize = true, MinimumSize = new Size(96, 30) };
         save.Click += OnSave;
         preview.Click += (_, _) => LivePreviewRequested?.Invoke(this, Collect());
         buttons.Controls.Add(save);
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(preview);
+        root.Controls.Add(buttons, 0, 1);
 
-        Controls.Add(layout);
-        Controls.Add(buttons);
+        Controls.Add(root);
         AcceptButton = save;
         CancelButton = cancel;
+    }
+
+    private void AddSection(string title)
+    {
+        var header = new Label
+        {
+            Text = title,
+            AutoSize = true,
+            Font = new Font(Font, FontStyle.Bold),
+            ForeColor = Color.FromArgb(60, 90, 150),
+            Margin = new Padding(0, _row == 0 ? 0 : 14, 0, 4),
+        };
+        _layout.Controls.Add(header, 0, _row);
+        _layout.SetColumnSpan(header, 2);
+        _row++;
+    }
+
+    private void AddRow(string label, Control control)
+    {
+        _layout.Controls.Add(new Label
+        {
+            Text = label,
+            Anchor = AnchorStyles.Left,
+            AutoSize = true,
+            Margin = new Padding(3, 9, 8, 3),
+        }, 0, _row);
+        control.Margin = control.Margin == Padding.Empty ? new Padding(3, 6, 3, 6) : control.Margin;
+        control.Anchor = AnchorStyles.Left;
+        _layout.Controls.Add(control, 1, _row);
+        _row++;
+    }
+
+    private static Control WithValue(Control main, Control value)
+    {
+        var p = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty };
+        p.Controls.Add(main);
+        p.Controls.Add(value);
+        return p;
+    }
+
+    private void UpdateSliderLabels()
+    {
+        _speedValue.Text = $"{_speed.Value / 100.0:0.00}×";
+        _opacityValue.Text = $"{_opacity.Value} / 255";
+    }
+
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+
+        // Only shrink if the form genuinely exceeds a sane working area (guard against bogus
+        // tiny values). The content scrolls and the button bar is pinned, so any size works.
+        var wa = Screen.FromPoint(Cursor.Position).WorkingArea;
+        if (wa.Width >= 640 && wa.Height >= 480)
+        {
+            int w = Math.Min(Width, wa.Width - 60);
+            int h = Math.Min(Height, wa.Height - 60);
+            Size = new Size(w, h);
+            Location = new Point(wa.X + (wa.Width - w) / 2, wa.Y + (wa.Height - h) / 2);
+        }
     }
 
     private void LoadValues()
@@ -182,6 +258,7 @@ public sealed class SettingsForm : Form
         _idle.Value = Math.Clamp(_settings.IdleSeconds, (int)_idle.Minimum, (int)_idle.Maximum);
         _delay.Value = Math.Clamp(_settings.StartDelaySeconds, (int)_delay.Minimum, (int)_delay.Maximum);
         _autoStart.Checked = _settings.AutoStart || AutoStartManager.IsEnabled();
+        UpdateSliderLabels();
     }
 
     private AppSettings Collect()
