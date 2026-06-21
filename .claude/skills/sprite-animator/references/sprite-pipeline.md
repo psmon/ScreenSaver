@@ -145,6 +145,17 @@ py .../sprite-postprocess.py evaluate \
 ```
 
 Critical details:
+- **Frames play in numeric order, not lexicographic.** `process` sorts raw files by the numeric
+  `-fN` index, so f10/f11 follow f9 (not f1). If you pack frames yourself, sort the same way —
+  a plain string sort silently scrambles any animation with ≥10 frames (f10 lands after f1).
+- **Use `--align uniform` for multi-frame animation** (the default). It scales every frame by the
+  *same* factor and centers it, so the character keeps a stable size/position as it plays. The
+  legacy `--align fill` scales each frame to its own bbox — right for a single-pose catalog, but
+  it makes an animation jitter and "jump" (looks like overlapping/multiple characters).
+- For a directional swim sheet (8 dir × 2 kick), the **up-kick / "fins together" prompt often
+  makes the model draw a motion sequence (multiple figures)**. Reference a verified clean
+  single-character frame, prompt a *minimal* change, and if it still duplicates, fall back to
+  reusing the clean down-kick frame for that direction.
 - **Downscale raw (~800px) directly to 192×192**, not to 48×48 then upscale — detail survives
   only with a direct nearest-neighbor downscale (`Image.resize((W,H), Image.NEAREST)`).
 - **Scale padding with frame size** (48→2, 192→8) so any CSS/runtime ratio stays constant.
@@ -186,3 +197,6 @@ bundles (e.g. `src/ScreenSaverOverlay/Assets/sprites/`). See SKILL.md §"Consumi
 | Pixel grid looks mushy | no nearest downscale | `Image.resize((W,H), Image.NEAREST)` |
 | Sheet ratio broken | padding not proportional | padding = 2 × target_w / 48 |
 | master.png too small | `assemble` default size 24 | pass `--target-size 192x192` |
+| animation plays frames out of order (≥10 frames) | lexicographic sort (f10 after f1) | `process` sorts by numeric `-fN` index |
+| character jitters / looks like multiple overlapping | per-frame bbox fill scaling | `--align uniform` (uniform scale + center anchor) |
+| up-kick frame has two characters | "fins together" reads as a motion sequence | clean single-frame reference + minimal change, else reuse down-kick |

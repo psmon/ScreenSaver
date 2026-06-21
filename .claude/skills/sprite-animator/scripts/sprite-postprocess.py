@@ -18,6 +18,7 @@ import argparse
 import json
 import math
 import pathlib
+import re
 import sys
 from datetime import datetime
 from typing import List, Optional, Tuple
@@ -104,6 +105,37 @@ def fit_to_target(rgba: Image.Image, target_w: int = TARGET_W, target_h: int = T
     canvas = Image.new("RGBA", (target_w, target_h), (0, 0, 0, 0))
     canvas.paste(resized, ((target_w - new_w) // 2, target_h - new_h), resized)  # anchor to bottom
     return canvas
+
+
+def place_uniform(frames_rgba: List[Image.Image], target_w: int, target_h: int,
+                  fill: float = 0.9, anchor: str = "center") -> List[Image.Image]:
+    """
+    Align a sequence of frames for smooth ANIMATION: every frame is scaled by the SAME factor
+    and its alpha-bbox is anchored to a consistent spot, so the character keeps a stable size
+    and position as the animation plays. (fit_to_target scales each frame to its own bbox, which
+    is right for a catalog but makes an animation jitter/jump.) The shared scale is chosen so the
+    largest pose fits within `fill` of the frame; all other frames use that same scale.
+    """
+    bboxes = [alpha_bbox(f) for f in frames_rgba]
+    dims = [max(b[2] - b[0], b[3] - b[1]) for b in bboxes if b]
+    if not dims:
+        return [Image.new("RGBA", (target_w, target_h), (0, 0, 0, 0)) for _ in frames_rgba]
+    ref = max(dims)  # largest extent across the action -> everything fits at one scale
+    scale = (min(target_w, target_h) * fill) / ref
+
+    out = []
+    for f, b in zip(frames_rgba, bboxes):
+        canvas = Image.new("RGBA", (target_w, target_h), (0, 0, 0, 0))
+        if b is not None:
+            cropped = f.crop(b)
+            nw = max(1, int(round(cropped.width * scale)))
+            nh = max(1, int(round(cropped.height * scale)))
+            r = cropped.resize((nw, nh), Image.NEAREST)
+            px = (target_w - nw) // 2
+            py = (target_h - nh) if anchor == "bottom" else (target_h - nh) // 2
+            canvas.paste(r, (px, py), r)
+        out.append(canvas)
+    return out
 
 
 # ─────────────────────────────────────────────────────────────
@@ -202,17 +234,27 @@ def cmd_process(args) -> int:
     SHEET_PADDING = max(1, 2 * target_w // 48)
 
     pattern = f"*-{args.character}-{args.pose}-f*.png"
-    raw_files = sorted(raw_dir.glob(pattern))
+
+    # Sort by the NUMERIC frame index, not lexicographically — otherwise f10/f11 sort right
+    # after f1 (before f2) and an animation with >=10 frames plays its frames out of order.
+    def _frame_num(p):
+        m = re.search(r"-f(\d+)\.png$", p.name)
+        return int(m.group(1)) if m else 0
+    raw_files = sorted(raw_dir.glob(pattern), key=_frame_num)
     if not raw_files:
         print(json.dumps({"status": "error", "message": f"no raw frames matching {pattern} in {raw_dir}"}, ensure_ascii=False))
         return 1
 
-    processed: List[Image.Image] = []
-    for f in raw_files:
-        rgba = matte(f, mode=args.matting)
-        fit = fit_to_target(rgba, target_w, target_h)
-        quant = quantize_to_palette(fit, palette_rgb)
-        processed.append(quant)
+    mattes = [matte(f, mode=args.matting) for f in raw_files]
+    if getattr(args, "align", "uniform") == "uniform":
+        # consistent size + anchor across frames -> smooth animation (default)
+        fitted = place_uniform(mattes, target_w, target_h,
+                               fill=getattr(args, "fill", 0.9),
+                               anchor=getattr(args, "anchor", "center"))
+    else:
+        # legacy per-frame fill (good for single-pose catalogs)
+        fitted = [fit_to_target(m, target_w, target_h) for m in mattes]
+    processed: List[Image.Image] = [quantize_to_palette(f, palette_rgb) for f in fitted]
 
     sheet, rects = assemble_action_sheet(processed, target_w, target_h)
     sheet_path = output_dir / f"{args.pose}.png"
@@ -461,6 +503,11 @@ def main() -> int:
     p.add_argument("--matting", default="auto", choices=["auto", "birefnet", "hsv"])
     p.add_argument("--target-size", default="24x32", help="WxH (default 24x32, e.g. 48x48 for character+instrument)")
     p.add_argument("--duration-ms", type=int, default=120)
+    p.add_argument("--align", default="uniform", choices=["uniform", "fill"],
+                   help="uniform = same scale+anchor across frames (smooth animation, default); "
+                        "fill = scale each frame to its own bbox (catalog/single-pose)")
+    p.add_argument("--fill", type=float, default=0.9, help="uniform: largest pose occupies this fraction of the frame")
+    p.add_argument("--anchor", default="center", choices=["center", "bottom"], help="uniform vertical anchor")
     p.set_defaults(func=cmd_process)
 
     a = sub.add_parser("assemble", help="Pack all characters' sheets into PACKED MASTER + index.json")
