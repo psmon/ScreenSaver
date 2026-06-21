@@ -10,7 +10,7 @@ namespace ScreenSaverOverlay.Settings;
 public sealed class AppSettings
 {
     /// <summary>Id of the selected effect (see EffectRegistry).</summary>
-    public string EffectId { get; set; } = "bouncing-circles";
+    public string EffectId { get; set; } = "diver-sprite";
 
     /// <summary>Number of shapes / particles.</summary>
     public int Count { get; set; } = 12;

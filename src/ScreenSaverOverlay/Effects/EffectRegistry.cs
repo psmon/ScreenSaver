@@ -9,6 +9,7 @@ public static class EffectRegistry
     private static readonly Func<IEffect>[] Factories =
     {
         () => new BouncingCircleEffect(),
+        () => new DiverSpriteEffect(),
         // Future: () => new Direct2DParticlesEffect(), () => new Model3DEffect(), ...
     };
 

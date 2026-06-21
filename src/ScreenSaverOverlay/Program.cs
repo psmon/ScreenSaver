@@ -30,6 +30,16 @@ internal static class Program
 
         ApplicationConfiguration.Initialize();
 
+        // --render-test <effectId> <outPng> : render a montage of an effect for visual QA.
+        int rt = Array.FindIndex(args, a => a.Equals("--render-test", StringComparison.OrdinalIgnoreCase));
+        if (rt >= 0)
+        {
+            string effectId = rt + 1 < args.Length ? args[rt + 1] : "diver-sprite";
+            string outPng = rt + 2 < args.Length ? args[rt + 2] : "effect-test.png";
+            RenderTest.Run(effectId, outPng);
+            return 0;
+        }
+
         // --settings opens just the settings dialog (handy for quick edits / UI testing).
         if (args.Any(a => a.Equals("--settings", StringComparison.OrdinalIgnoreCase)))
         {
