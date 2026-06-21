@@ -10,6 +10,7 @@ public static class EffectRegistry
     {
         () => new BouncingCircleEffect(),
         () => new DiverSpriteEffect(),
+        () => new Diver2SpriteEffect(),
         // Future: () => new Direct2DParticlesEffect(), () => new Model3DEffect(), ...
     };
 

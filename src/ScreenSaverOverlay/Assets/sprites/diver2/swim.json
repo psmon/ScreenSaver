@@ -1,0 +1,360 @@
+{
+  "frames": {
+    "diver2_swim_0.png": {
+      "frame": {
+        "x": 8,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_1.png": {
+      "frame": {
+        "x": 208,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_2.png": {
+      "frame": {
+        "x": 408,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_3.png": {
+      "frame": {
+        "x": 608,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_4.png": {
+      "frame": {
+        "x": 808,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_5.png": {
+      "frame": {
+        "x": 1008,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_6.png": {
+      "frame": {
+        "x": 1208,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_7.png": {
+      "frame": {
+        "x": 1408,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_8.png": {
+      "frame": {
+        "x": 1608,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_9.png": {
+      "frame": {
+        "x": 1808,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_10.png": {
+      "frame": {
+        "x": 2008,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_11.png": {
+      "frame": {
+        "x": 2208,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_12.png": {
+      "frame": {
+        "x": 2408,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_13.png": {
+      "frame": {
+        "x": 2608,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_14.png": {
+      "frame": {
+        "x": 2808,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    },
+    "diver2_swim_15.png": {
+      "frame": {
+        "x": 3008,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 110
+    }
+  },
+  "meta": {
+    "app": "pencil-creator",
+    "version": "2.7.0",
+    "image": "swim.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 3208,
+      "h": 208
+    },
+    "scale": "1",
+    "frameTags": [
+      {
+        "name": "swim",
+        "from": 0,
+        "to": 15,
+        "direction": "forward"
+      }
+    ],
+    "slug": "diver2"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "slug": "diver2",
+  "description": "cute girl scuba diver; 8-direction x 2 kick swim; aquarium overlay mascot",
+  "padding": 8,
+  "swimDirections": 8,
+  "swimKickPhases": 2,
+  "actions": [
+    {
+      "name": "swim",
+      "sheet": "swim.png",
+      "json": "swim.json",
+      "frames": 16,
+      "frameWidth": 192,
+      "frameHeight": 192,
+      "durationMs": 110
+    },
+    {
+      "name": "hunt",
+      "sheet": "hunt.png",
+      "json": "hunt.json",
+      "frames": 6,
+      "frameWidth": 192,
+      "frameHeight": 192,
+      "durationMs": 110
+    },
+    {
+      "name": "flee",
+      "sheet": "flee.png",
+      "json": "flee.json",
+      "frames": 4,
+      "frameWidth": 192,
+      "frameHeight": 192,
+      "durationMs": 110
+    }
+  ]
+}
