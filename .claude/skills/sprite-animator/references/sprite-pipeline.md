@@ -26,6 +26,28 @@ back as the `edit` reference for all subsequent frames.
 (playing an instrument) are fine at 4f; a phrase with intro→build→climax→finish reads better at
 6–8f. More frames = more generation calls = more cost, so validate style on a pilot first.
 
+### Directional / multi-pose characters — the animation-aware model sheet
+
+For a character that must face many directions (e.g. an 8-way swimmer), don't start from a
+single full-body pose — have the concept stage **generate an animation-aware model sheet** and
+feed *that* to the per-frame model as a vision reference. Validated on `diver2` (a girl scuba
+diver): one gpt-image-2 model sheet showing **front / side / back views plus a key action pose
+(fins mid-kick)** gave Gemini enough of the 3D form that the 8 directional frames came out far
+more consistent than diver1, which used a single side reference.
+
+- Concept prompt: *"Character model sheet for 2D sprite animation of ONE character. Show the
+  SAME character in a clean turnaround: front, side, back, plus one dynamic action pose. …"*
+- Then every frame is an `edit` against that sheet with a strong single-character clause:
+  `redraw … as ONE single isolated full-body sprite … NO model sheet, NO turnaround, NO other
+  poses, NO thumbnails` — otherwise the sheet layout leaks back in as multiple small figures.
+
+**Swim sheet layout (directions × kick phases).** A natural swim that both turns *and* moves
+its fins is `D directions × K kick phases`, frames ordered `f(dir*K + phase)` (diver2 = 8×2 =
+16). The renderer picks `dir = round(headingDeg / 360 * D) % D` from the heading and cycles
+`phase` over time. Keep one clean down-kick per direction as the anchor; if a direction's
+up-kick won't generate as a single character (see Phase 4), reuse its down-kick — a couple of
+non-cycling directions read fine.
+
 ---
 
 ## Phase 1 — analyze (concept art → boxes + descriptions)
@@ -121,6 +143,23 @@ character** (e.g. `…-play-f1.png` when f1 is good) and name the cycle position
 For chroma residue, re-calling with a clean reference also clears the green — that's preferred
 over fancier matting. Escalate to BiRefNet matting only if needed.
 
+### Verify EVERY action sheet, by slicing it the way the renderer does
+
+The decisive QA step (and an easy one to skip): after assembling, **slice each finished sheet by
+its JSON frame rects and tile the frames** — that shows exactly what the renderer will draw and
+catches three classes of bug at once: out-of-order frames, per-frame scale/position jitter, and
+duplicate/multi-figure frames. Do it for **every action, not just the swim** — on `diver2` the
+swim was verified and shipped, but the `hunt` sheet's f0/f2/f3 had quietly come out as
+multi-figure clusters and only surfaced when the user watched the harpoon scene. A ~10-line
+script is enough:
+
+```python
+sheet = Image.open("…/hunt.png"); items = list(json.load(open("…/hunt.json"))["frames"].items())
+for i,(k,v) in enumerate(items):
+    fr=v["frame"]; sheet.crop((fr["x"],fr["y"],fr["x"]+fr["w"],fr["y"]+fr["h"])).save(f"f{i}.png")
+# tile + eyeball: every cell must be ONE centered character, consistent size, correct order
+```
+
 ---
 
 ## Phase 5 — integrate (sheet + master + index)
@@ -200,3 +239,5 @@ bundles (e.g. `src/ScreenSaverOverlay/Assets/sprites/`). See SKILL.md §"Consumi
 | animation plays frames out of order (≥10 frames) | lexicographic sort (f10 after f1) | `process` sorts by numeric `-fN` index |
 | character jitters / looks like multiple overlapping | per-frame bbox fill scaling | `--align uniform` (uniform scale + center anchor) |
 | up-kick frame has two characters | "fins together" reads as a motion sequence | clean single-frame reference + minimal change, else reuse down-kick |
+| one action looks perfect, another has duplicates | only the first sheet was verified | slice & eyeball EVERY action sheet (hunt/flee too), not just swim |
+| 8-way frames drift in identity | single full-body reference lacks the other angles | concept-stage model sheet (front/side/back) as the vision reference |

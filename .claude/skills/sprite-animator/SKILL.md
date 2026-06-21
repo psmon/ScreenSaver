@@ -82,6 +82,12 @@ Pick the scope to the motion: 1 frame for a catalog, 4 frames for a standard loo
 for a character whose natural motion is the point. Validate style on the Phase-2 pilot before
 spending the batch.
 
+For a **multi-direction character** (e.g. an 8-way swimmer), have the concept stage produce an
+**animation-aware model sheet** (front/side/back + a key action pose) and use *that* as the
+`edit` reference — it locks the 3D form so directional frames stay consistent. Lay the swim sheet
+out as `directions × kick-phases`. And **verify every action sheet, not just the first** — slice
+each sheet by its JSON rects and eyeball it. Both patterns are in `references/sprite-pipeline.md`.
+
 ---
 
 ## Scripts (in `scripts/`)
@@ -122,14 +128,28 @@ The pipeline produces, per character:
 This is engine-ready (Phaser/Godot load it directly) and trivial to slice in a custom player:
 frame rect = `index * (frameSize + padding)`, so a renderer needs no runtime JSON fetch.
 
-**For the Screensaver Overlay:** mirror the final sheet(s) + `index.json` into a folder the app
-bundles — recommended `src/ScreenSaverOverlay/Assets/sprites/{slug}/`. A future
-`SpriteEffect : IEffect` (alongside `BouncingCircleEffect`) loads the sheet once, advances the
-frame index on `Update(dt)` at the JSON's frame duration, and blits the current frame rect in
-`Render(g)` — drawn on top of the hosted screensaver exactly like the bouncing circles. Because
-`IEffect` is renderer-agnostic, the same sheet later works for a GPU/Direct2D renderer too.
+**For the Screensaver Overlay (implemented pattern):** mirror the final sheets into
+`src/ScreenSaverOverlay/Assets/sprites/{slug}/` (the `.csproj` copies `Assets/sprites/**` to the
+build output) and add a small `manifest.json`:
 
-Keep frames on a transparent (matted) background so they composite cleanly over the screensaver.
+```json
+{ "slug": "diver2", "padding": 8, "swimDirections": 8, "swimKickPhases": 2,
+  "actions": [ { "name": "swim", "sheet": "swim.png", "json": "swim.json",
+                 "frames": 16, "frameWidth": 192, "frameHeight": 192, "durationMs": 110 }, … ] }
+```
+
+The reusable `SwimmingSpriteEffect : IEffect` base then plays it: it loads each action sheet via
+`SpriteSheet.Load(png, json)` (frame rects from the Aseprite JSON), and a concrete character is
+just a config record — `DiverSpriteEffect` (swim sheet = 8-dir "spin", 1 phase) and
+`Diver2SpriteEffect` (swim sheet = 8-dir × 2 kick) differ only by `SpriteConfig`. While swimming
+it picks the facing frame `dir*kickPhases + phase` where `dir = round(headingDeg/360*D) % D`
+follows the character's heading and `phase` cycles over time; rare `hunt`/`flee` actions play
+their sheets and a detached projectile is its own sprite. Because `IEffect` is renderer-agnostic,
+the same sheets later work for a GPU/Direct2D renderer.
+
+So a new character ships as **assets + one `SpriteConfig`** — no new effect logic. Keep frames on
+a transparent (matted) background so they composite cleanly over the screensaver, and (per the
+pipeline) **slice and eyeball every action sheet** before wiring it up.
 
 ---
 
@@ -154,4 +174,7 @@ Extracted from the `pencil-creator` project's `pencil-design` skill (image provi
 `sprite-animator` agent + `sprite-animation-craft` / `sprite-animation-flow` knowledge, where
 the pipeline was validated on a 19-character orchestra, a 36-character dance troupe, and the
 natural-motion `vocal-ex` set. Re-scoped here for generating overlay sprite assets, with the
-ComfyUI local provider dropped (OpenAI + Gemini retained).
+ComfyUI local provider dropped (OpenAI + Gemini retained). Further validated in this repo on two
+playable scuba divers — `diver` (8-direction spin) and `diver2` (animation-aware model sheet,
+8-direction × 2-kick swim, harpoon + flee) — which drove the model-sheet, numeric-ordering,
+uniform-alignment, and per-action-verification additions documented above.
