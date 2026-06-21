@@ -89,5 +89,7 @@ _*.png
 !.secret/*.json.tmp
 
 # Generated sprite intermediates (concept art / raw frames are large)
+# Final runtime sheets live under src/.../Assets/sprites/ and ARE committed.
 image/
 design/sprite/
+tmp/

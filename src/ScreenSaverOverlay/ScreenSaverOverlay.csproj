@@ -16,4 +16,11 @@
     <Product>Screensaver Overlay</Product>
   </PropertyGroup>
 
+  <!-- Bundle sprite assets next to the exe so a SpriteEffect can load them at runtime. -->
+  <ItemGroup>
+    <Content Include="Assets\sprites\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

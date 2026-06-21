@@ -1,0 +1,43 @@
+{
+  "slug": "diver",
+  "description": "cute scuba diver with harpoon; aquarium overlay mascot",
+  "padding": 8,
+  "actions": [
+    {
+      "name": "idle",
+      "sheet": "idle.png",
+      "json": "idle.json",
+      "frames": 4,
+      "frameWidth": 192,
+      "frameHeight": 192,
+      "durationMs": 120
+    },
+    {
+      "name": "spin",
+      "sheet": "spin.png",
+      "json": "spin.json",
+      "frames": 8,
+      "frameWidth": 192,
+      "frameHeight": 192,
+      "durationMs": 120
+    },
+    {
+      "name": "flee",
+      "sheet": "flee.png",
+      "json": "flee.json",
+      "frames": 4,
+      "frameWidth": 192,
+      "frameHeight": 192,
+      "durationMs": 120
+    },
+    {
+      "name": "hunt",
+      "sheet": "hunt.png",
+      "json": "hunt.json",
+      "frames": 6,
+      "frameWidth": 192,
+      "frameHeight": 192,
+      "durationMs": 120
+    }
+  ]
+}

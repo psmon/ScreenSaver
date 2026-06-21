@@ -1,0 +1,192 @@
+{
+  "frames": {
+    "diver_spin_0.png": {
+      "frame": {
+        "x": 8,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 120
+    },
+    "diver_spin_1.png": {
+      "frame": {
+        "x": 208,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 120
+    },
+    "diver_spin_2.png": {
+      "frame": {
+        "x": 408,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 120
+    },
+    "diver_spin_3.png": {
+      "frame": {
+        "x": 608,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 120
+    },
+    "diver_spin_4.png": {
+      "frame": {
+        "x": 808,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 120
+    },
+    "diver_spin_5.png": {
+      "frame": {
+        "x": 1008,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 120
+    },
+    "diver_spin_6.png": {
+      "frame": {
+        "x": 1208,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 120
+    },
+    "diver_spin_7.png": {
+      "frame": {
+        "x": 1408,
+        "y": 8,
+        "w": 192,
+        "h": 192
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 192,
+        "h": 192
+      },
+      "sourceSize": {
+        "w": 192,
+        "h": 192
+      },
+      "duration": 120
+    }
+  },
+  "meta": {
+    "app": "pencil-creator",
+    "version": "2.7.0",
+    "image": "spin.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1608,
+      "h": 208
+    },
+    "scale": "1",
+    "frameTags": [
+      {
+        "name": "spin",
+        "from": 0,
+        "to": 7,
+        "direction": "forward"
+      }
+    ],
+    "slug": "diver"
+  }
+}
