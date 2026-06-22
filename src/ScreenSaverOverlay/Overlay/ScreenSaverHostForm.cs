@@ -18,7 +18,7 @@ public sealed class ScreenSaverHostForm : Form
     private readonly string _scrPath;
     private Process? _scrProcess;
 
-    public ScreenSaverHostForm(string scrPath)
+    public ScreenSaverHostForm(string scrPath, Rectangle bounds)
     {
         _scrPath = scrPath;
 
@@ -28,7 +28,7 @@ public sealed class ScreenSaverHostForm : Form
         TopMost = true;
         BackColor = Color.Black;
         Text = "ScreenSaverHost";
-        Bounds = Screen.PrimaryScreen?.Bounds ?? new Rectangle(0, 0, 1920, 1080);
+        Bounds = bounds;
     }
 
     public void Start()

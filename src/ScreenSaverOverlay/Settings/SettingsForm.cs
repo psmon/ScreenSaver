@@ -14,6 +14,7 @@ public sealed class SettingsForm : Form
     private readonly AppSettings _settings;
 
     private ComboBox _screenSaverCombo = null!;
+    private ComboBox _monitorCombo = null!;
     private readonly List<EffectRow> _effectRows = new();
     private TrackBar _opacity = null!;
     private TextBox _colorHex = null!;
@@ -87,6 +88,19 @@ public sealed class SettingsForm : Form
         saverPanel.Controls.Add(_screenSaverCombo);
         saverPanel.Controls.Add(saverBrowse);
         AddRow("화면보호기", saverPanel);
+
+        // --- target monitor picker ---------------------------------------
+        _monitorCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 300, DropDownWidth = 360 };
+        _monitorCombo.Items.Add(new MonitorItem("주 모니터만", "primary"));
+        _monitorCombo.Items.Add(new MonitorItem("모든 모니터", "all"));
+        var screens = Screen.AllScreens;
+        for (int i = 0; i < screens.Length; i++)
+        {
+            var b = screens[i].Bounds;
+            string label = $"모니터 {i + 1} — {b.Width}×{b.Height}{(screens[i].Primary ? " (주)" : "")}";
+            _monitorCombo.Items.Add(new MonitorItem(label, screens[i].DeviceName));
+        }
+        AddRow("작동 모니터", _monitorCombo);
 
         AddSection("오버레이 효과 (여러 개 동시 선택 가능 · 각자 개수·크기·속도)");
         AddFullRow(BuildEffectsTable());
@@ -267,6 +281,7 @@ public sealed class SettingsForm : Form
     private void LoadValues()
     {
         SelectSaver(_settings.ScreenSaverPath);
+        SelectMonitor(_settings.MonitorTarget);
 
         foreach (var row in _effectRows)
         {
@@ -292,6 +307,7 @@ public sealed class SettingsForm : Form
     {
         var s = _settings.Clone();
         s.ScreenSaverPath = (_screenSaverCombo.SelectedItem as SaverItem)?.Path ?? s.ScreenSaverPath;
+        s.MonitorTarget = (_monitorCombo.SelectedItem as MonitorItem)?.Target ?? s.MonitorTarget;
 
         s.Layers = _effectRows.Select(row => new EffectLayer
         {
@@ -328,6 +344,21 @@ public sealed class SettingsForm : Form
             }
         }
         _screenSaverCombo.SelectedIndex = match;
+    }
+
+    private void SelectMonitor(string target)
+    {
+        int match = 0; // default to "주 모니터만"
+        for (int i = 0; i < _monitorCombo.Items.Count; i++)
+        {
+            if (_monitorCombo.Items[i] is MonitorItem item &&
+                string.Equals(item.Target, target, StringComparison.OrdinalIgnoreCase))
+            {
+                match = i;
+                break;
+            }
+        }
+        _monitorCombo.SelectedIndex = match;
     }
 
     private void OnBrowseSaver(object? sender, EventArgs e)
@@ -405,6 +436,11 @@ public sealed class SettingsForm : Form
     }
 
     private sealed record SaverItem(string Name, string Path)
+    {
+        public override string ToString() => Name;
+    }
+
+    private sealed record MonitorItem(string Name, string Target)
     {
         public override string ToString() => Name;
     }

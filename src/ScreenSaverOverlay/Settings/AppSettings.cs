@@ -77,6 +77,13 @@ public sealed class AppSettings
     /// </summary>
     public string ScreenSaverPath { get; set; } = "";
 
+    /// <summary>
+    /// Which monitor(s) the screensaver + overlay run on:
+    /// <c>"primary"</c> (default), <c>"all"</c>, or a specific monitor's device name
+    /// (e.g. <c>\\.\DISPLAY2</c>). Unknown values fall back to the primary monitor.
+    /// </summary>
+    public string MonitorTarget { get; set; } = "primary";
+
     /// <summary>Start the agent automatically when the user logs in.</summary>
     public bool AutoStart { get; set; } = false;
 
@@ -166,6 +173,28 @@ public sealed class AppSettings
         s.Size = layer.Size;
         s.Speed = layer.Speed;
         return s;
+    }
+
+    /// <summary>
+    /// The monitors the screensaver + overlay should cover, per <see cref="MonitorTarget"/>.
+    /// Always returns at least one screen.
+    /// </summary>
+    public List<Screen> ResolveTargetScreens()
+    {
+        var all = Screen.AllScreens;
+        var primary = Screen.PrimaryScreen ?? all[0];
+
+        switch ((MonitorTarget ?? "").Trim().ToLowerInvariant())
+        {
+            case "all":
+                return all.Length > 0 ? all.ToList() : new List<Screen> { primary };
+            case "" or "primary":
+                return new List<Screen> { primary };
+            default:
+                var match = all.FirstOrDefault(
+                    s => string.Equals(s.DeviceName, MonitorTarget, StringComparison.OrdinalIgnoreCase));
+                return new List<Screen> { match ?? primary };
+        }
     }
 
     /// <summary>The .scr to host: explicit selection, else the one registered in Windows.</summary>

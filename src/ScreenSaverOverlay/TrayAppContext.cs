@@ -18,10 +18,12 @@ public sealed class TrayAppContext : ApplicationContext
 {
     private readonly NotifyIcon _tray;
     private readonly IdleWatcher _idle;
+    private readonly KeyboardHook _previewKeyHook = new();
     private readonly System.Windows.Forms.Timer _overlayDelay = new();
 
-    private OverlayForm? _overlay;
-    private ScreenSaverHostForm? _host;
+    // One overlay / host per target monitor (see AppSettings.ResolveTargetScreens).
+    private readonly List<OverlayForm> _overlays = new();
+    private readonly List<ScreenSaverHostForm> _hosts = new();
     private AppSettings _settings;
 
     private bool _sessionActive;    // an automatic idle-triggered session is running
@@ -57,6 +59,10 @@ public sealed class TrayAppContext : ApplicationContext
         _idle = new IdleWatcher(_settings.IdleSeconds);
         _idle.IdleReached += OnIdleReached;
         _idle.ActivityResumed += OnActivityResumed;
+
+        // A keypress dismisses any manual preview (the overlay never takes focus, so a global
+        // hook is the only way to catch it). Installed only while a preview is up.
+        _previewKeyHook.KeyPressed += OnPreviewKeyPressed;
 
         // Make sure we restore the user's Windows screensaver even on an unexpected shutdown.
         AppDomain.CurrentDomain.ProcessExit += (_, _) => RestoreWindowsSaver();
@@ -162,15 +168,14 @@ public sealed class TrayAppContext : ApplicationContext
 
         if (hosted)
         {
-            // Host the chosen screensaver inside our own fullscreen window.
-            _host = new ScreenSaverHostForm(scr!);
-            _host.Start();
+            // Host the chosen screensaver — one window per target monitor.
+            StartHosts(scr!);
 
             // The overlay joins after the configured delay (default 10s).
             int delayMs = Math.Max(0, _settings.StartDelaySeconds) * 1000;
             if (delayMs == 0)
             {
-                ShowOverlay();
+                ShowOverlays();
             }
             else
             {
@@ -182,7 +187,7 @@ public sealed class TrayAppContext : ApplicationContext
         else
         {
             // No screensaver available -> overlay only.
-            ShowOverlay();
+            ShowOverlays();
             UpdateStatus("오버레이 작동 (화면보호기 없음)");
         }
     }
@@ -192,7 +197,7 @@ public sealed class TrayAppContext : ApplicationContext
         _overlayDelay.Stop();
         if (_sessionActive)
         {
-            ShowOverlay();
+            ShowOverlays();
             UpdateStatus("화면보호기 + 오버레이 작동 중");
         }
     }
@@ -201,26 +206,53 @@ public sealed class TrayAppContext : ApplicationContext
     {
         _sessionActive = false;
         _overlayDelay.Stop();
-        _overlay?.Stop();
-        _host?.Stop();
-        _host?.Dispose();
-        _host = null;
+        StopOverlays();
+        StopHosts();
         UpdateStatus($"대기 중 — 유휴 {_settings.IdleSeconds}s 후 작동");
     }
 
-    // ---- overlay helpers --------------------------------------------------
+    // ---- overlay / host helpers (one per target monitor) ------------------
 
-    private void ShowOverlay()
+    private void ShowOverlays()
     {
-        EnsureOverlay();
-        _overlay!.ApplySettings(_settings);
-        _overlay.Start();
+        StopOverlays();
+        foreach (var screen in _settings.ResolveTargetScreens())
+        {
+            var overlay = new OverlayForm(_settings, screen.Bounds);
+            overlay.Start();
+            _overlays.Add(overlay);
+        }
     }
 
-    private void EnsureOverlay()
+    private void StopOverlays()
     {
-        if (_overlay is { IsDisposed: false }) return;
-        _overlay = new OverlayForm(_settings);
+        foreach (var overlay in _overlays)
+        {
+            overlay.Stop();
+            overlay.Dispose();
+        }
+        _overlays.Clear();
+    }
+
+    private void StartHosts(string scr)
+    {
+        StopHosts();
+        foreach (var screen in _settings.ResolveTargetScreens())
+        {
+            var host = new ScreenSaverHostForm(scr, screen.Bounds);
+            host.Start();
+            _hosts.Add(host);
+        }
+    }
+
+    private void StopHosts()
+    {
+        foreach (var host in _hosts)
+        {
+            host.Stop();
+            host.Dispose();
+        }
+        _hosts.Clear();
     }
 
     // ---- manual previews --------------------------------------------------
@@ -231,14 +263,15 @@ public sealed class TrayAppContext : ApplicationContext
         _previewItem.Checked = _previewMode;
         if (_previewMode)
         {
-            ShowOverlay();
-            UpdateStatus("오버레이 미리보기");
+            ShowOverlays();
+            UpdateStatus("오버레이 미리보기 (아무 키나 누르면 종료)");
         }
         else
         {
-            _overlay?.Stop();
+            StopOverlays();
             UpdateStatus($"대기 중 — 유휴 {_settings.IdleSeconds}s 후 작동");
         }
+        UpdatePreviewKeyHook();
     }
 
     private void ToggleHostedPreview()
@@ -246,11 +279,10 @@ public sealed class TrayAppContext : ApplicationContext
         if (_hostedPreview)
         {
             _hostedPreview = false;
-            _overlay?.Stop();
-            _host?.Stop();
-            _host?.Dispose();
-            _host = null;
+            StopOverlays();
+            StopHosts();
             UpdateStatus($"대기 중 — 유휴 {_settings.IdleSeconds}s 후 작동");
+            UpdatePreviewKeyHook();
             return;
         }
 
@@ -263,10 +295,29 @@ public sealed class TrayAppContext : ApplicationContext
         }
 
         _hostedPreview = true;
-        _host = new ScreenSaverHostForm(scr);
-        _host.Start();
-        ShowOverlay();
-        UpdateStatus("호스팅 미리보기 (화면보호기 + 오버레이)");
+        StartHosts(scr);
+        ShowOverlays();
+        UpdateStatus("호스팅 미리보기 (아무 키나 누르면 종료)");
+        UpdatePreviewKeyHook();
+    }
+
+    // ---- preview dismissal (keyboard) -------------------------------------
+
+    /// <summary>Keep the keyboard hook installed exactly while a manual preview is up.</summary>
+    private void UpdatePreviewKeyHook()
+    {
+        if (_previewMode || _hostedPreview)
+            _previewKeyHook.Install();
+        else
+            _previewKeyHook.Uninstall();
+    }
+
+    private void OnPreviewKeyPressed(object? sender, EventArgs e)
+    {
+        // Tear down whichever preview is running; both toggles flip their flag off and
+        // refresh the hook via UpdatePreviewKeyHook.
+        if (_previewMode) TogglePreview();
+        else if (_hostedPreview) ToggleHostedPreview();
     }
 
     // ---- residency / shortcut --------------------------------------------
@@ -327,16 +378,18 @@ public sealed class TrayAppContext : ApplicationContext
             _settings = s;
             _previewMode = true;
             _previewItem.Checked = true;
-            ShowOverlay();
-            UpdateStatus("오버레이 미리보기");
+            ShowOverlays();
+            UpdateStatus("오버레이 미리보기 (아무 키나 누르면 종료)");
+            UpdatePreviewKeyHook();
         };
         _settingsForm.SettingsSaved += (_, s) =>
         {
             _settings = s;
             SyncAutoStartItem();
             ApplyAutoMode(); // pick up idle-timeout / auto-mode changes
-            if (_overlay is { IsDisposed: false })
-                _overlay.ApplySettings(_settings);
+            // Rebuild any live overlays so new settings (incl. monitor target) take effect.
+            if (_overlays.Count > 0)
+                ShowOverlays();
         };
         _settingsForm.FormClosed += (_, _) => _settingsForm = null;
         _settingsForm.Show();
@@ -350,11 +403,10 @@ public sealed class TrayAppContext : ApplicationContext
         _overlayDelay.Stop();
         _idle.Stop();
         _idle.Dispose();
+        _previewKeyHook.Dispose();
         RestoreWindowsSaver();
-        _host?.Stop();
-        _host?.Dispose();
-        _overlay?.Stop();
-        _overlay?.Dispose();
+        StopHosts();
+        StopOverlays();
         _tray.Visible = false;
         _tray.Dispose();
         ExitThread();

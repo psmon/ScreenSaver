@@ -8,9 +8,10 @@ using ScreenSaverOverlay.Settings;
 namespace ScreenSaverOverlay.Overlay;
 
 /// <summary>
-/// A borderless, topmost, click-through layered window that covers the whole desktop and
+/// A borderless, topmost, click-through layered window that covers one target monitor and
 /// renders the active effect with per-pixel alpha. It never activates, so it floats above
-/// the running screensaver without stealing focus or feeding it input.
+/// the running screensaver without stealing focus or feeding it input. One instance is
+/// created per target monitor (see <see cref="AppSettings.ResolveTargetScreens"/>).
 /// </summary>
 public sealed class OverlayForm : Form
 {
@@ -29,10 +30,12 @@ public sealed class OverlayForm : Form
     private Bitmap? _surface;
     private IntPtr _memDc, _dib, _oldObj, _bits;
     private Rectangle _bounds;
+    private readonly Rectangle _targetBounds;
 
-    public OverlayForm(AppSettings settings)
+    public OverlayForm(AppSettings settings, Rectangle targetBounds)
     {
         _settings = settings.Clone().Normalized();
+        _targetBounds = targetBounds;
 
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -43,9 +46,6 @@ public sealed class OverlayForm : Form
         _timer.Interval = FrameIntervalMs;
         _timer.Tick += OnTick;
     }
-
-    // Cover the entire virtual desktop (all monitors).
-    private static Rectangle FullDesktopBounds => SystemInformation.VirtualScreen;
 
     protected override bool ShowWithoutActivation => true;
 
@@ -65,7 +65,7 @@ public sealed class OverlayForm : Form
 
     public void Start()
     {
-        _bounds = FullDesktopBounds;
+        _bounds = _targetBounds;
         Bounds = _bounds;
         RecreateSurface();
         BuildEffects();
@@ -83,16 +83,6 @@ public sealed class OverlayForm : Form
         _timer.Stop();
         _clock.Stop();
         Hide();
-    }
-
-    /// <summary>Apply new settings live (used by the preview / settings dialog).</summary>
-    public void ApplySettings(AppSettings settings)
-    {
-        _settings = settings.Clone().Normalized();
-        _bounds = FullDesktopBounds;
-        Bounds = _bounds;
-        RecreateSurface();
-        BuildEffects();
     }
 
     /// <summary>Create one effect instance per enabled layer, each with its own count/size/speed.</summary>
