@@ -1,5 +1,26 @@
 # Screensaver Overlay
 
+<p align="right"><b>English</b> · <a href="README.ko.md">한국어</a></p>
+
+<p align="center">
+  <img src="home/screen_sample_1.jpg" alt="Screensaver Overlay running: Marine Aquarium 3 hosted underneath, with the live Claude Code console (top-left) and generated sprite characters swimming on top" width="100%">
+</p>
+
+<p align="center">
+  <b>Your screensaver, alive with overlays.</b><br>
+  A resident Windows agent hosts your chosen screensaver and paints animated layers on top of it —
+  a live <b>Claude Code work console</b>, generated <b>sprite characters</b>, and GDI+ effects —
+  all running together over the saver instead of killing it.
+</p>
+
+<p align="center">
+  <i>Above: Marine Aquarium 3 hosted underneath · top-left = Claude Code's live status console (IPC)
+  · the “SAM AI” mascot and scuba divers are sprite-sheet animations made with the bundled
+  <a href="#sprite-animation-toolkit-sprite-animator-skill"><code>sprite-animator</code> skill</a>.</i>
+</p>
+
+---
+
 A resident Windows agent that, when the PC goes idle, **hosts your chosen screensaver inside
 its own window and paints an animated overlay on top of it** — so the screensaver and the
 overlay run together. When you return, both tear down and the agent stands by.
@@ -122,9 +143,60 @@ The canonical script lives at `tools/ipc/claude-status-hook.ps1` (copy it to `~/
 **Disable:** remove the `hooks` block from `~/.claude/settings.json` (a `.bak` backup is kept).
 Then add the **"Claude Code Monitor (console)"** effect as an overlay layer in Settings.
 
+## Sprite animation toolkit (`sprite-animator` skill)
+
+The animated characters you see in the overlay (the scuba divers `diver` and `diver2`) are not
+hand-drawn — they're produced by a **Claude Code skill that was developed in this repo**:
+[`.claude/skills/sprite-animator/`](.claude/skills/sprite-animator/SKILL.md). It turns a single
+concept image into a **playable 2D sprite-sheet animation**, keeping the character's identity
+(face, hair, costume, props) consistent across every frame.
+
+**Real output from this repo** — the `diver2` character below is a single concept image turned
+into packed Aseprite sprite sheets that the overlay plays verbatim
+([`src/ScreenSaverOverlay/Assets/sprites/diver2/`](src/ScreenSaverOverlay/Assets/sprites/diver2)):
+
+<p align="center">
+  <img src="src/ScreenSaverOverlay/Assets/sprites/diver2/swim.png" alt="diver2 swim sheet — 16 frames, 8 directions × 2 kick phases" width="100%"><br>
+  <i><code>swim.png</code> — 16 frames = 8 directions × 2 kick phases (192×192 each). The effect picks
+  the frame <code>dir*2 + phase</code> to face the diver's heading as she swims.</i>
+</p>
+
+<p align="center">
+  <img src="src/ScreenSaverOverlay/Assets/sprites/diver2/hunt.png" alt="diver2 hunt sheet — 6 frames, harpoon fire" width="75%"><br>
+  <i><code>hunt.png</code> — a 6-frame harpoon-fire action; the projectile detaches as its own sprite.
+  The character stays identical to the swim frames — that consistency is the whole craft.</i>
+</p>
+
+It's a **self-contained, reusable skill** — you can drive it on its own to make sprite
+animations for *any* project, not just this screensaver. Two capabilities, usable together or
+alone:
+
+1. **Image generation** — draw concept art and per-frame poses with OpenAI `gpt-image-2` or
+   Gemini (`scripts/image-gen.py`, `--provider openai|gemini`).
+2. **Sprite pipeline** — matte → crop → downscale → quantize, then pack into a horizontal strip
+   sheet + an **Aseprite-Hash `index.json`** (`scripts/sprite-postprocess.py`).
+
+The 5-phase flow (analyze → pilot → batch → fix-pass → integrate) and the consistency craft
+(use `edit()` with a verified-clean reference frame + per-character descriptions) live in
+[`references/sprite-pipeline.md`](.claude/skills/sprite-animator/references/sprite-pipeline.md)
+and [`references/image-providers.md`](.claude/skills/sprite-animator/references/image-providers.md).
+
+**Use it independently** — just invoke the skill (e.g. *"스프라이트 애니메이션 만들어"*,
+*"컨셉아트 분리해서 애니로 만들어"*, or *"gpt-image로 그려줘"*) and point it at a concept image.
+It needs an API key in `.secret/{openai,gemini}.json` (git-ignored; copy the shipped `.tmp`
+templates) and `py -m pip install -r .claude/skills/sprite-animator/scripts/requirements-sprite.txt`.
+
+**Output is engine-ready** (Phaser/Godot load the Aseprite JSON directly). To play a sheet in
+*this* overlay, drop it under `src/ScreenSaverOverlay/Assets/sprites/{slug}/` with a small
+`manifest.json`; the reusable `SwimmingSpriteEffect : IEffect` then plays it, so a new character
+ships as **assets + one `SpriteConfig`** — no new effect code (see `DiverSpriteEffect` /
+`Diver2SpriteEffect`).
+
 ## Roadmap
 
 - Direct2D / Direct3D renderer for GPU-accelerated and 3D effects (the `IEffect` contract is
   already renderer-agnostic).
-- More effects: particles, sprites/characters, physics.
-- Multi-monitor per-screen effect placement.
+- More effects: particles, physics. *(Sprite characters — done, via the `sprite-animator`
+  skill above.)*
+- Multi-monitor per-screen effect placement. *(Per-monitor host + overlay targeting — done;
+  each target screen gets its own screensaver host + overlay.)*
