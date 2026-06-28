@@ -24,9 +24,13 @@ public sealed class TrayAppContext : ApplicationContext
     // One overlay / host per target monitor (see AppSettings.ResolveTargetScreens).
     private readonly List<OverlayForm> _overlays = new();
     private readonly List<ScreenSaverHostForm> _hosts = new();
+    // Opaque covers on the non-target monitors while locked (security filter).
+    private readonly List<SecurityFilterForm> _filters = new();
+    private LockScreenForm? _lockScreen;
     private AppSettings _settings;
 
     private bool _sessionActive;    // an automatic idle-triggered session is running
+    private bool _lockedSession;     // the active session is a PIN-locked one
     private bool _hostedPreview;     // manual "host + overlay" test from the tray
     private bool _previewMode;       // manual overlay-only test from the tray/settings
     private bool _suppressingWinSaver; // we have Windows' auto-screensaver turned off
@@ -153,8 +157,29 @@ public sealed class TrayAppContext : ApplicationContext
 
     private void OnActivityResumed(object? sender, EventArgs e)
     {
-        if (_sessionActive)
+        if (!_sessionActive) return;
+
+        // A locked session does not tear down on activity — it demands the PIN first.
+        if (_lockedSession)
+            PresentLockScreen();
+        else
             StopSession();
+    }
+
+    /// <summary>Bring up (or re-focus) the PIN screen; the correct PIN ends the session.</summary>
+    private void PresentLockScreen()
+    {
+        if (_lockScreen is { IsDisposed: false })
+        {
+            _lockScreen.Present();
+            return;
+        }
+
+        var screen = Screen.PrimaryScreen ?? Screen.AllScreens[0];
+        _lockScreen = new LockScreenForm(_settings, screen.Bounds);
+        _lockScreen.Unlocked += (_, _) => StopSession();
+        _lockScreen.Present();
+        UpdateStatus("잠금 — PIN 입력 대기");
     }
 
     // ---- automatic session (host + delayed overlay) -----------------------
@@ -162,9 +187,23 @@ public sealed class TrayAppContext : ApplicationContext
     private void StartSession()
     {
         _sessionActive = true;
+        // A session locks only when the user enabled it AND set a PIN (otherwise it could
+        // never be unlocked). Manual previews are never locked.
+        _lockedSession = _settings.LockEnabled && _settings.HasPin;
 
         var scr = _settings.ResolveScreenSaverPath();
         bool hosted = !string.IsNullOrEmpty(scr) && File.Exists(scr);
+
+        if (_lockedSession)
+        {
+            // Cover every non-target monitor with the security filter so no desktop content
+            // stays visible on the other screens while locked.
+            StartFilters(_settings.ResolveSecurityScreens());
+            // Without a hosted .scr the target monitors carry only a click-through overlay,
+            // which would leave the desktop reachable — back them with an opaque filter too.
+            if (!hosted)
+                StartFilters(_settings.ResolveTargetScreens());
+        }
 
         if (hosted)
         {
@@ -198,17 +237,35 @@ public sealed class TrayAppContext : ApplicationContext
         if (_sessionActive)
         {
             ShowOverlays();
-            UpdateStatus("화면보호기 + 오버레이 작동 중");
+            // If the user already returned and the PIN prompt is up, the freshly-shown overlay
+            // would otherwise render its sprites over the prompt — keep the prompt on top.
+            if (_lockScreen is { IsDisposed: false })
+                _lockScreen.Present();
+            else
+                UpdateStatus("화면보호기 + 오버레이 작동 중");
         }
     }
 
     private void StopSession()
     {
         _sessionActive = false;
+        _lockedSession = false;
         _overlayDelay.Stop();
+        CloseLockScreen();
         StopOverlays();
         StopHosts();
+        StopFilters();
         UpdateStatus($"대기 중 — 유휴 {_settings.IdleSeconds}s 후 작동");
+    }
+
+    private void CloseLockScreen()
+    {
+        if (_lockScreen is { IsDisposed: false })
+        {
+            _lockScreen.Close();
+            _lockScreen.Dispose();
+        }
+        _lockScreen = null;
     }
 
     // ---- overlay / host helpers (one per target monitor) ------------------
@@ -253,6 +310,26 @@ public sealed class TrayAppContext : ApplicationContext
             host.Dispose();
         }
         _hosts.Clear();
+    }
+
+    private void StartFilters(IEnumerable<Screen> screens)
+    {
+        foreach (var screen in screens)
+        {
+            var filter = new SecurityFilterForm(screen.Bounds, _settings.SecondaryWallpaperPath);
+            filter.Start();
+            _filters.Add(filter);
+        }
+    }
+
+    private void StopFilters()
+    {
+        foreach (var filter in _filters)
+        {
+            filter.Stop();
+            filter.Dispose();
+        }
+        _filters.Clear();
     }
 
     // ---- manual previews --------------------------------------------------
@@ -405,8 +482,10 @@ public sealed class TrayAppContext : ApplicationContext
         _idle.Dispose();
         _previewKeyHook.Dispose();
         RestoreWindowsSaver();
+        CloseLockScreen();
         StopHosts();
         StopOverlays();
+        StopFilters();
         _tray.Visible = false;
         _tray.Dispose();
         ExitThread();

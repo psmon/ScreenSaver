@@ -24,6 +24,10 @@ public sealed class SettingsForm : Form
     private CheckBox _hostedAuto = null!;
     private CheckBox _autoStart = null!;
     private Label _opacityValue = null!;
+    private CheckBox _lockEnabled = null!;
+    private TextBox _pinBox = null!;
+    private Label _pinStatus = null!;
+    private TextBox _secondaryWallpaper = null!;
 
     /// <summary>Fired with the current (unsaved) settings whenever the user hits Preview.</summary>
     public event EventHandler<AppSettings>? LivePreviewRequested;
@@ -133,6 +137,31 @@ public sealed class SettingsForm : Form
 
         _delay = new NumericUpDown { Minimum = 0, Maximum = 600, Width = 100 };
         AddRow("오버레이 지연 (초)", _delay);
+
+        AddSection("보안 잠금");
+
+        _lockEnabled = new CheckBox
+        {
+            Text = "화면보호기 작동 시 잠금 — 해제하려면 PIN 인증\n작동 모니터는 화면보호기, 나머지는 지정 배경으로 가려집니다",
+            AutoSize = true,
+            Margin = new Padding(3, 6, 3, 6),
+        };
+        AddRow("잠금 모드", _lockEnabled);
+
+        var pinPanel = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty };
+        _pinBox = new TextBox { Width = 150, UseSystemPasswordChar = true, PlaceholderText = "변경하려면 입력" };
+        _pinStatus = new Label { AutoSize = true, Margin = new Padding(10, 8, 0, 0), ForeColor = Color.FromArgb(90, 90, 110) };
+        pinPanel.Controls.Add(_pinBox);
+        pinPanel.Controls.Add(_pinStatus);
+        AddRow("PIN", pinPanel);
+
+        var wallPanel = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty };
+        _secondaryWallpaper = new TextBox { Width = 300, PlaceholderText = "비우면 검은 화면" };
+        var wallBrowse = new Button { Text = "찾기…", AutoSize = true, Margin = new Padding(8, 0, 0, 0) };
+        wallBrowse.Click += OnBrowseWallpaper;
+        wallPanel.Controls.Add(_secondaryWallpaper);
+        wallPanel.Controls.Add(wallBrowse);
+        AddRow("보조 모니터 배경", wallPanel);
 
         AddSection("상주 / 바로가기");
 
@@ -300,6 +329,9 @@ public sealed class SettingsForm : Form
         _idle.Value = Math.Clamp(_settings.IdleSeconds, (int)_idle.Minimum, (int)_idle.Maximum);
         _delay.Value = Math.Clamp(_settings.StartDelaySeconds, (int)_delay.Minimum, (int)_delay.Maximum);
         _autoStart.Checked = _settings.AutoStart || AutoStartManager.IsEnabled();
+        _lockEnabled.Checked = _settings.LockEnabled;
+        _secondaryWallpaper.Text = _settings.SecondaryWallpaperPath;
+        _pinStatus.Text = _settings.HasPin ? "(설정됨)" : "(미설정)";
         UpdateSliderLabels();
     }
 
@@ -327,6 +359,13 @@ public sealed class SettingsForm : Form
         s.IdleSeconds = (int)_idle.Value;
         s.StartDelaySeconds = (int)_delay.Value;
         s.AutoStart = _autoStart.Checked;
+
+        s.LockEnabled = _lockEnabled.Checked;
+        s.SecondaryWallpaperPath = _secondaryWallpaper.Text.Trim();
+        // The existing PIN hash carries over via the clone; only replace it if the user typed
+        // a new one (a blank box leaves the current PIN untouched).
+        if (!string.IsNullOrEmpty(_pinBox.Text))
+            s.SetPin(_pinBox.Text);
         return s.Normalized();
     }
 
@@ -384,6 +423,16 @@ public sealed class SettingsForm : Form
         _screenSaverCombo.SelectedIndex = idx;
     }
 
+    private void OnBrowseWallpaper(object? sender, EventArgs e)
+    {
+        using var dlg = new OpenFileDialog
+        {
+            Filter = "이미지 (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp|모든 파일 (*.*)|*.*",
+        };
+        if (dlg.ShowDialog(this) == DialogResult.OK)
+            _secondaryWallpaper.Text = dlg.FileName;
+    }
+
     private void OnCreateShortcut(object? sender, EventArgs e)
     {
         try
@@ -411,6 +460,12 @@ public sealed class SettingsForm : Form
     private void OnSave(object? sender, EventArgs e)
     {
         var s = Collect();
+        if (s.LockEnabled && !s.HasPin)
+        {
+            MessageBox.Show(this,
+                "잠금 모드가 켜져 있지만 PIN이 설정되지 않았습니다.\nPIN을 설정하기 전까지는 잠금이 동작하지 않습니다.",
+                "Screensaver Overlay", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
         try
         {
             AutoStartManager.Set(s.AutoStart);

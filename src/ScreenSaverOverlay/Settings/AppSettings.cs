@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -86,6 +88,71 @@ public sealed class AppSettings
 
     /// <summary>Start the agent automatically when the user logs in.</summary>
     public bool AutoStart { get; set; } = false;
+
+    // ---- security lock ----------------------------------------------------
+
+    /// <summary>
+    /// When true, an idle-triggered session becomes a *lock*: the target monitor(s) play the
+    /// screensaver while the rest are covered by a security filter, and returning to the
+    /// machine brings up a PIN prompt — only the correct PIN tears the session down.
+    /// This is an in-app lock (not an OS-level lock); it does not survive Ctrl+Alt+Del.
+    /// </summary>
+    public bool LockEnabled { get; set; } = false;
+
+    /// <summary>Base64 SHA-256 hash of (salt + PIN). Empty = no PIN set.</summary>
+    public string LockPinHash { get; set; } = "";
+
+    /// <summary>Base64 random salt mixed into the PIN hash.</summary>
+    public string LockPinSalt { get; set; } = "";
+
+    /// <summary>
+    /// Image shown full-screen on the non-target ("security filter") monitors while locked.
+    /// Empty = plain black. Sensitive desktop content is never visible behind it.
+    /// </summary>
+    public string SecondaryWallpaperPath { get; set; } = "";
+
+    /// <summary>True once a PIN has been configured, so the lock can actually be unlocked.</summary>
+    [JsonIgnore]
+    public bool HasPin => !string.IsNullOrEmpty(LockPinHash) && !string.IsNullOrEmpty(LockPinSalt);
+
+    /// <summary>Replace the stored PIN. An empty/whitespace value clears it.</summary>
+    public void SetPin(string? pin)
+    {
+        if (string.IsNullOrWhiteSpace(pin))
+        {
+            LockPinHash = LockPinSalt = "";
+            return;
+        }
+        var salt = RandomNumberGenerator.GetBytes(16);
+        LockPinSalt = Convert.ToBase64String(salt);
+        LockPinHash = HashPin(pin, salt);
+    }
+
+    /// <summary>Constant-time check of an entered PIN against the stored hash.</summary>
+    public bool VerifyPin(string? pin)
+    {
+        if (!HasPin || string.IsNullOrEmpty(pin))
+            return false;
+        try
+        {
+            var salt = Convert.FromBase64String(LockPinSalt);
+            var candidate = Convert.FromBase64String(HashPin(pin, salt));
+            var stored = Convert.FromBase64String(LockPinHash);
+            return CryptographicOperations.FixedTimeEquals(candidate, stored);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string HashPin(string pin, byte[] salt)
+    {
+        var data = new byte[salt.Length + Encoding.UTF8.GetByteCount(pin)];
+        Buffer.BlockCopy(salt, 0, data, 0, salt.Length);
+        Encoding.UTF8.GetBytes(pin, 0, pin.Length, data, salt.Length);
+        return Convert.ToBase64String(SHA256.HashData(data));
+    }
 
     // ---- persistence ------------------------------------------------------
 
@@ -195,6 +262,17 @@ public sealed class AppSettings
                     s => string.Equals(s.DeviceName, MonitorTarget, StringComparison.OrdinalIgnoreCase));
                 return new List<Screen> { match ?? primary };
         }
+    }
+
+    /// <summary>
+    /// The monitors NOT covered by the screensaver/overlay — they get the security filter
+    /// (designated wallpaper) while locked. Empty when every monitor is a target.
+    /// </summary>
+    public List<Screen> ResolveSecurityScreens()
+    {
+        var targets = ResolveTargetScreens();
+        var targetNames = targets.Select(s => s.DeviceName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return Screen.AllScreens.Where(s => !targetNames.Contains(s.DeviceName)).ToList();
     }
 
     /// <summary>The .scr to host: explicit selection, else the one registered in Windows.</summary>
